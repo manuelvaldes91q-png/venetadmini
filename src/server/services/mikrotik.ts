@@ -118,17 +118,20 @@ export async function provisionClientToRouter(routerId: string, clientName: stri
 
         // 2. Add or update ARP
         const arps = await conn.write('/ip/arp/print');
-        if (!arps.find((a: any) => a['mac-address'] === mac)) {
-           await conn.write('/ip/arp/add', [ `=address=${ip}`, `=mac-address=${mac}`, `=comment=${clientName}` ]);
+        const existingArp = arps.find((a: any) => a['mac-address'] === mac || a.address === ip);
+        if (!existingArp) {
+           await conn.write('/ip/arp/add', [ `=address=${ip}`, `=mac-address=${mac}`, `=comment=${clientName}`, `=interface=SALIDA` ]);
+        } else {
+           await conn.write('/ip/arp/set', [ `*${existingArp['.id']}`, `=comment=${clientName}`, `=interface=SALIDA` ]);
         }
 
         // 3. Add or update Simple Queue
         const queues = await conn.write('/queue/simple/print');
         const existingQ = queues.find((q: any) => q.target && q.target.startsWith(ip));
         if (existingQ) {
-            await conn.write('/queue/simple/set', [ `*${existingQ['.id']}`, `=max-limit=${profileLimit}`, `=name=${clientName}` ]);
+            await conn.write('/queue/simple/set', [ `*${existingQ['.id']}`, `=max-limit=${profileLimit}`, `=name=${clientName}`, `=comment=${clientName}` ]);
         } else {
-            await conn.write('/queue/simple/add', [ `=name=${clientName}`, `=target=${ip}`, `=max-limit=${profileLimit}` ]);
+            await conn.write('/queue/simple/add', [ `=name=${clientName}`, `=target=${ip}`, `=max-limit=${profileLimit}`, `=comment=${clientName}` ]);
         }
 
         conn.close();
@@ -184,6 +187,10 @@ export async function deleteClientOnRouter(routerId: string, ip: string, mac: st
         const leases = await conn.write('/ip/dhcp-server/lease/print');
         const lease = leases.find((l: any) => l['mac-address'] === mac || l.address === ip);
         if (lease) await conn.write('/ip/dhcp-server/lease/remove', [ `*${lease['.id']}` ]);
+
+        const arps = await conn.write('/ip/arp/print');
+        const arp = arps.find((a: any) => a.address === ip || a['mac-address'] === mac);
+        if (arp) await conn.write('/ip/arp/remove', [ `*${arp['.id']}` ]);
 
         conn.close();
     } catch(err) {
