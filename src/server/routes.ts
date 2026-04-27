@@ -274,6 +274,7 @@ apiRouter.get('/leases', requireAuth, async (req, res) => {
 apiRouter.delete('/routers/:id', requireAuth, requireAdmin, (req, res) => {
   const db = getDb();
   try {
+    db.prepare('DELETE FROM clients WHERE routerId = ?').run(req.params.id);
     db.prepare('DELETE FROM routers WHERE id = ?').run(req.params.id);
     res.json({ success: true });
   } catch(err) {
