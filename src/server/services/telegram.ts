@@ -1,7 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { getDb } from '../db.js';
 import crypto from 'crypto';
-import { provisionClientToRouter, getLeasesFromRouters } from './mikrotik.js';
+import { provisionClientToRouter, getLeasesFromRouters, toggleClientOnRouter } from './mikrotik.js';
 
 let bot: TelegramBot | null = null;
 const userStates = new Map<number, any>();
@@ -19,22 +19,51 @@ export function setupTelegramBot() {
     const token = tokenSetting.value;
     bot = new TelegramBot(token, { polling: true });
 
-    bot.onText(/\/start/, (msg) => {
-      bot?.sendMessage(msg.chat.id, '🔌 *NexusISP Bot*\n\n/estado <nombre> - Buscar cliente\n/aprovisionar - Aprovisionar de DHCP', { parse_mode: 'Markdown' });
+    bot.onText(/\/(start|menu)/, (msg) => {
+      bot?.sendMessage(msg.chat.id, '🔌 *NexusISP Bot - Menú Principal*\n\nSelecciona una opción abajo o usa:\n`/estado <nombre>` para buscar.', { 
+        parse_mode: 'Markdown',
+        reply_markup: {
+          keyboard: [
+            [{ text: '🔍 Buscar Cliente' }, { text: '📡 Aprovisionar DHCP' }]
+          ],
+          resize_keyboard: true
+        }
+      });
     });
+
+    const sendClientPanel = (chatId: number, client: any) => {
+      const statusIcon = client.disabled ? '🔴 CORTADO' : '🟢 ACTIVO';
+      const text = `👤 *Cliente:* ${client.name}\n🌐 *IP:* ${client.ip}\n🔗 *MAC:* ${client.mac}\n⚡ *Estado:* ${statusIcon}`;
+      const actionText = client.disabled ? '🟢 Activar Cliente' : '🔴 Cortar Cliente';
+      const actionData = `toggle_client_${client.id}`;
+      
+      bot?.sendMessage(chatId, text, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: actionText, callback_data: actionData }]
+          ]
+        }
+      });
+    };
 
     bot.onText(/\/estado (.+)/, (msg, match) => {
       const chatId = msg.chat.id;
       const clientName = match?.[1];
       if (!clientName) return bot?.sendMessage(chatId, 'Uso: /estado <nombre>');
       
-      const client = db.prepare('SELECT * FROM clients WHERE name LIKE ?').get(`%${clientName}%`) as any;
+      const clients = db.prepare('SELECT * FROM clients WHERE name LIKE ? LIMIT 5').all(`%${clientName}%`) as any[];
       
-      if (client) {
-         bot?.sendMessage(chatId, `👤 *Cliente:* ${client.name}\n🌐 *IP:* ${client.ip}\n🔗 *MAC:* ${client.mac}\n⚡ *Estado:* ${client.disabled ? '🔴 CORTADO' : '🟢 ACTIVO'}`, { parse_mode: 'Markdown' });
+      if (clients.length > 0) {
+         clients.forEach(c => sendClientPanel(chatId, c));
       } else {
          bot?.sendMessage(chatId, `❌ Cliente no encontrado.`);
       }
+    });
+
+    bot.onText(/\/buscar/, (msg) => {
+      userStates.set(msg.chat.id, { step: 'await_search_name' });
+      bot?.sendMessage(msg.chat.id, 'Escribe el nombre del cliente a buscar:');
     });
 
     bot.onText(/\/aprovisionar/, async (msg) => {
@@ -62,9 +91,70 @@ export function setupTelegramBot() {
        const chatId = query.message?.chat.id;
        if (!chatId) return;
        const data = query.data;
-       const state = userStates.get(chatId);
 
-       if (!state) return;
+       if (data === 'menu_search') {
+          userStates.set(chatId, { step: 'await_search_name' });
+          bot?.sendMessage(chatId, 'Escribe el nombre del cliente a buscar:');
+          return bot?.answerCallbackQuery(query.id);
+       }
+       if (data === 'menu_provision') {
+           try {
+               const leases = await getLeasesFromRouters();
+               if (leases.length === 0) {
+                   bot?.sendMessage(chatId, '❌ No se encontraron IPs disponibles en DHCP.');
+                   return bot?.answerCallbackQuery(query.id);
+               }
+               userStates.set(chatId, { step: 'select_lease', leases });
+               const keyboard = leases.slice(0, 10).map(ls => ([{ text: `${ls.ip} (${ls.hostname})`, callback_data: `lease_${ls.id}` }]));
+               bot?.sendMessage(chatId, 'Selecciona una IP detectada en DHCP para aprovisionar:', {
+                   reply_markup: { inline_keyboard: keyboard }
+               });
+           } catch (err) {
+               bot?.sendMessage(chatId, '❌ Error conectando con router.');
+           }
+           return bot?.answerCallbackQuery(query.id);
+       }
+
+       if (data?.startsWith('toggle_client_')) {
+          const clientId = data.replace('toggle_client_', '');
+          try {
+             const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId) as any;
+             if (!client) {
+                 bot?.sendMessage(chatId, '❌ Cliente no encontrado.');
+                 return bot?.answerCallbackQuery(query.id);
+             }
+             const newDisabled = client.disabled ? 0 : 1;
+             await toggleClientOnRouter(client.routerId, client.ip, !!newDisabled);
+             db.prepare('UPDATE clients SET disabled = ?, status = ? WHERE id = ?').run(
+                 newDisabled, newDisabled ? 'cut' : 'active', clientId
+             );
+             
+             const statusIcon = newDisabled ? '🔴 CORTADO' : '🟢 ACTIVO';
+             const text = `👤 *Cliente:* ${client.name}\n🌐 *IP:* ${client.ip}\n🔗 *MAC:* ${client.mac}\n⚡ *Estado:* ${statusIcon}`;
+             const actionText = newDisabled ? '🟢 Activar Cliente' : '🔴 Cortar Cliente';
+             
+             if (query.message?.message_id) {
+                bot?.editMessageText(text, {
+                    chat_id: chatId,
+                    message_id: query.message.message_id,
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: actionText, callback_data: `toggle_client_${client.id}` }]
+                        ]
+                    }
+                });
+             } else {
+                bot?.sendMessage(chatId, `✅ *Status Actualizado*\n\nEl cliente *${client.name}* ha sido ${newDisabled ? '🔴 CORTADO' : '🟢 ACTIVADO'}.`, { parse_mode: 'Markdown' });
+             }
+          } catch(err) {
+             bot?.sendMessage(chatId, `❌ Error al cambiar estado.`);
+          }
+          return bot?.answerCallbackQuery(query.id);
+       }
+
+       const state = userStates.get(chatId);
+       if (!state) return bot?.answerCallbackQuery(query.id);
 
        if (state.step === 'select_lease' && data?.startsWith('lease_')) {
            const leaseId = data.replace('lease_', '');
@@ -118,12 +208,46 @@ export function setupTelegramBot() {
        bot?.answerCallbackQuery(query.id);
     });
 
-    bot.on('message', (msg) => {
+    bot.on('message', async (msg) => {
        const chatId = msg.chat.id;
        const text = msg.text;
        if (!text || text.startsWith('/')) return;
 
+       if (text === '🔍 Buscar Cliente') {
+          userStates.set(chatId, { step: 'await_search_name' });
+          bot?.sendMessage(chatId, 'Escribe el nombre del cliente a buscar:');
+          return;
+       }
+
+       if (text === '📡 Aprovisionar DHCP') {
+           try {
+               const leases = await getLeasesFromRouters();
+               if (leases.length === 0) {
+                   bot?.sendMessage(chatId, '❌ No se encontraron IPs disponibles en DHCP.');
+                   return;
+               }
+               userStates.set(chatId, { step: 'select_lease', leases });
+               const keyboard = leases.slice(0, 10).map(ls => ([{ text: `${ls.ip} (${ls.hostname})`, callback_data: `lease_${ls.id}` }]));
+               bot?.sendMessage(chatId, 'Selecciona una IP detectada en DHCP para aprovisionar:', {
+                   reply_markup: { inline_keyboard: keyboard }
+               });
+           } catch (err) {
+               bot?.sendMessage(chatId, '❌ Error conectando con router.');
+           }
+           return;
+       }
+
        const state = userStates.get(chatId);
+       if (state && state.step === 'await_search_name') {
+           userStates.delete(chatId);
+           const clients = db.prepare('SELECT * FROM clients WHERE name LIKE ? LIMIT 5').all(`%${text}%`) as any[];
+           if (clients.length > 0) {
+              clients.forEach(c => sendClientPanel(chatId, c));
+           } else {
+              bot?.sendMessage(chatId, `❌ Cliente no encontrado.`);
+           }
+           return;
+       }
        if (state && state.step === 'await_name') {
            state.name = text;
            state.step = 'select_router';
