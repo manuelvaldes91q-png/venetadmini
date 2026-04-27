@@ -73,16 +73,17 @@ export async function syncRouter(routerId: string) {
             // Sync with local DB
             const existing = existingClients.find(c => c.mac === mac || c.ip === target);
             const isDisabled = queue.disabled === "true" ? 1 : 0;
+            const statusValue = isDisabled ? 'cut' : 'active';
             const name = queue.name || "Default Queue";
 
             if (existing) {
-                db.prepare('UPDATE clients SET ip = ?, mac = ?, disabled = ?, profileId = IFNULL(profileId, ?) WHERE id = ?').run(
-                    target, mac, isDisabled, profileId, existing.id
+                db.prepare('UPDATE clients SET ip = ?, mac = ?, disabled = ?, status = ?, profileId = IFNULL(profileId, ?) WHERE id = ?').run(
+                    target, mac, isDisabled, statusValue, profileId, existing.id
                 );
             } else {
                 const newId = crypto.randomUUID();
                 db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, disabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-                    newId, router.id, name, target, mac, 'active', profileId, isDisabled
+                    newId, router.id, name, target, mac, statusValue, profileId, isDisabled
                 );
             }
         }
@@ -141,7 +142,7 @@ export async function toggleClientOnRouter(routerId: string, ip: string, disable
     if (!router) return;
 
     try {
-        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '' });
+        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 3 });
         await conn.connect();
         
         const queues = await conn.write('/queue/simple/print');
@@ -149,6 +150,13 @@ export async function toggleClientOnRouter(routerId: string, ip: string, disable
         
         if (q) {
             await conn.write(disable ? '/queue/simple/disable' : '/queue/simple/enable', [ `*${q['.id']}` ]);
+        }
+
+        const arps = await conn.write('/ip/arp/print');
+        const arp = arps.find((a: any) => a.address === ip);
+
+        if (arp) {
+            await conn.write(disable ? '/ip/arp/disable' : '/ip/arp/enable', [ `*${arp['.id']}` ]);
         }
         
         conn.close();
