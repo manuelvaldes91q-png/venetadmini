@@ -24,7 +24,7 @@ export function setupTelegramBot() {
         parse_mode: 'Markdown',
         reply_markup: {
           keyboard: [
-            [{ text: '🔍 Buscar Cliente' }, { text: '📡 Aprovisionar DHCP' }]
+            [{ text: '👥 Ver Todos los Clientes' }, { text: '📡 Aprovisionar DHCP' }]
           ],
           resize_keyboard: true
         }
@@ -213,9 +213,13 @@ export function setupTelegramBot() {
        const text = msg.text;
        if (!text || text.startsWith('/')) return;
 
-       if (text === '🔍 Buscar Cliente') {
-          userStates.set(chatId, { step: 'await_search_name' });
-          bot?.sendMessage(chatId, 'Escribe el nombre del cliente a buscar:');
+       if (text === '👥 Ver Todos los Clientes') {
+          const clients = db.prepare('SELECT * FROM clients').all() as any[];
+          if (clients.length === 0) {
+              bot?.sendMessage(chatId, '❌ No hay clientes registrados.');
+              return;
+          }
+          clients.forEach(c => sendClientPanel(chatId, c));
           return;
        }
 
