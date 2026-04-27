@@ -110,8 +110,8 @@ export async function provisionClientToRouter(routerId: string, clientName: stri
         const leases = await conn.write('/ip/dhcp-server/lease/print');
         const lease = leases.find((l: any) => l['mac-address'] === mac || l.address === ip);
         if (lease && lease.dynamic === "true") {
-           await conn.write('/ip/dhcp-server/lease/make-static', [ `*${lease['.id']}` ]);
-           await conn.write('/ip/dhcp-server/lease/set', [ `*${lease['.id']}`, `=comment=${clientName}` ]);
+           await conn.write('/ip/dhcp-server/lease/make-static', [ `=.id=${lease['.id']}` ]);
+           await conn.write('/ip/dhcp-server/lease/set', [ `=.id=${lease['.id']}`, `=comment=${clientName}` ]);
         } else if (!lease) {
            await conn.write('/ip/dhcp-server/lease/add', [ `=address=${ip}`, `=mac-address=${mac}`, `=comment=${clientName}` ]);
         }
@@ -122,14 +122,14 @@ export async function provisionClientToRouter(routerId: string, clientName: stri
         if (!existingArp) {
            await conn.write('/ip/arp/add', [ `=address=${ip}`, `=mac-address=${mac}`, `=comment=${clientName}`, `=interface=SALIDA` ]);
         } else {
-           await conn.write('/ip/arp/set', [ `*${existingArp['.id']}`, `=comment=${clientName}`, `=interface=SALIDA` ]);
+           await conn.write('/ip/arp/set', [ `=.id=${existingArp['.id']}`, `=comment=${clientName}`, `=interface=SALIDA` ]);
         }
 
         // 3. Add or update Simple Queue
         const queues = await conn.write('/queue/simple/print');
         const existingQ = queues.find((q: any) => q.target && q.target.startsWith(ip));
         if (existingQ) {
-            await conn.write('/queue/simple/set', [ `*${existingQ['.id']}`, `=max-limit=${profileLimit}`, `=name=${clientName}`, `=comment=${clientName}` ]);
+            await conn.write('/queue/simple/set', [ `=.id=${existingQ['.id']}`, `=max-limit=${profileLimit}`, `=name=${clientName}`, `=comment=${clientName}` ]);
         } else {
             await conn.write('/queue/simple/add', [ `=name=${clientName}`, `=target=${ip}`, `=max-limit=${profileLimit}`, `=comment=${clientName}` ]);
         }
@@ -154,14 +154,14 @@ export async function toggleClientOnRouter(routerId: string, ip: string, disable
         const q = queues.find((q: any) => q.target && q.target.startsWith(ip));
         
         if (q) {
-            await conn.write(disable ? '/queue/simple/disable' : '/queue/simple/enable', [ `*${q['.id']}` ]);
+            await conn.write(disable ? '/queue/simple/disable' : '/queue/simple/enable', [ `=.id=${q['.id']}` ]);
         }
 
         const arps = await conn.write('/ip/arp/print');
         const arp = arps.find((a: any) => a.address === ip);
 
         if (arp) {
-            await conn.write(disable ? '/ip/arp/disable' : '/ip/arp/enable', [ `*${arp['.id']}` ]);
+            await conn.write(disable ? '/ip/arp/disable' : '/ip/arp/enable', [ `=.id=${arp['.id']}` ]);
         }
         
         conn.close();
@@ -182,15 +182,15 @@ export async function deleteClientOnRouter(routerId: string, ip: string, mac: st
         
         const queues = await conn.write('/queue/simple/print');
         const q = queues.find((q: any) => q.target && q.target.startsWith(ip));
-        if (q) await conn.write('/queue/simple/remove', [ `*${q['.id']}` ]);
+        if (q) await conn.write('/queue/simple/remove', [ `=.id=${q['.id']}` ]);
         
         const leases = await conn.write('/ip/dhcp-server/lease/print');
         const lease = leases.find((l: any) => l['mac-address'] === mac || l.address === ip);
-        if (lease) await conn.write('/ip/dhcp-server/lease/remove', [ `*${lease['.id']}` ]);
+        if (lease) await conn.write('/ip/dhcp-server/lease/remove', [ `=.id=${lease['.id']}` ]);
 
         const arps = await conn.write('/ip/arp/print');
         const arp = arps.find((a: any) => a.address === ip || a['mac-address'] === mac);
-        if (arp) await conn.write('/ip/arp/remove', [ `*${arp['.id']}` ]);
+        if (arp) await conn.write('/ip/arp/remove', [ `=.id=${arp['.id']}` ]);
 
         conn.close();
     } catch(err) {
