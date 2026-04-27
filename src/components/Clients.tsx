@@ -3,7 +3,7 @@ import { useStore } from '../lib/store';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
-import { Search, Plus, Wifi, WifiOff, Power, PowerOff, ShieldCheck, Users, SignalHigh, Trash2 } from 'lucide-react';
+import { Search, Plus, Wifi, WifiOff, Power, PowerOff, ShieldCheck, Users, SignalHigh, Trash2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
 
@@ -181,18 +181,28 @@ export function Clients() {
             <thead className="text-xs uppercase bg-neutral-950/80 text-neutral-500 sticky top-0 z-10 backdrop-blur-md">
               <tr>
                 <th className="px-4 py-4 font-medium pl-6">Información de Cliente</th>
-                <th className="px-4 py-4 font-medium">IP / Dirección MAC</th>
-                <th className="px-4 py-4 font-medium">Perfil Asignado</th>
+                <th className="px-4 py-4 font-medium">IP / DHCP</th>
+                <th className="px-4 py-4 font-medium">Consumo Total</th>
+                <th className="px-4 py-4 font-medium">Perfil / Plan</th>
                 <th className="px-4 py-4 font-medium">Estado</th>
                 <th className="px-4 py-4 font-medium text-right pr-6">Acción</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((client) => (
+              {filtered.map((client) => {
+                const formatBytes = (bytes: number) => {
+                    if (bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                };
+
+                return (
                 <tr key={client.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
                   <td className="px-4 py-3 pl-6">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${client.disabled ? 'bg-rose-950/30 border-rose-900/50 text-rose-500' : 'bg-indigo-950/30 border-indigo-900/50 text-indigo-400'}`}>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center border ${client.disabled ? 'bg-rose-950/30 border-rose-900/50 text-rose-500' : 'bg-indigo-950/30 border-indigo-900/50 text-[#F6D000]'}`}>
                         {client.disabled ? <WifiOff className="w-5 h-5" /> : <Wifi className="w-5 h-5" />}
                       </div>
                       <div>
@@ -207,6 +217,15 @@ export function Clients() {
                   <td className="px-4 py-3 font-mono">
                     <div className="text-indigo-300">{client.ip}</div>
                     <div className="text-xs text-neutral-500 mt-1">{client.mac}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                     <div className="flex flex-col">
+                        <span className="text-sm font-bold text-white tracking-tight">{formatBytes(client.totalBytes || 0)}</span>
+                        <span className="text-[10px] text-neutral-500 uppercase flex items-center gap-1">
+                           <ArrowUpRight className="w-2 h-2 text-rose-500" /> {formatBytes(client.txBytes || 0)}
+                           <ArrowDownRight className="w-2 h-2 text-emerald-500" /> {formatBytes(client.rxBytes || 0)}
+                        </span>
+                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <select 
@@ -266,11 +285,12 @@ export function Clients() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-neutral-500">
+                  <td colSpan={6} className="py-12 text-center text-neutral-500">
                     <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
                     <p>No se encontraron clientes.</p>
                   </td>

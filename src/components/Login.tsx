@@ -46,7 +46,11 @@ export function Login() {
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center neon-border-blue mb-4">
             <Zap className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white neon-text-blue">NexusISP</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">
+            <span className="text-[#F6D000]">VENET</span>
+            <span className="text-[#00247D]">I</span>
+            <span className="text-[#CF142B]">SP</span>
+          </h1>
           <p className="text-neutral-400 text-sm font-mono mt-1">Puerta de Identidad</p>
         </div>
 

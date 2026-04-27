@@ -1,6 +1,6 @@
 {
-  "name": "NexusISP - Smart MikroTik Manager",
-  "description": "Next-generation ISP management system with MikroTik integration, automated provisioning, billing, and Telegram bot.",
+  "name": "VENETISP - Smart MikroTik Manager",
+  "description": "Sistema de gestión para MikroTik con colores y branding VENETISP",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

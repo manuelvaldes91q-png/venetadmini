@@ -40,7 +40,10 @@ export async function initDb() {
       mac TEXT,
       status TEXT,
       profileId TEXT,
-      disabled INTEGER DEFAULT 0
+      disabled INTEGER DEFAULT 0,
+      txBytes INTEGER DEFAULT 0,
+      rxBytes INTEGER DEFAULT 0,
+      totalBytes INTEGER DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS profiles (
       id TEXT PRIMARY KEY,

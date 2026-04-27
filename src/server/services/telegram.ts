@@ -6,6 +6,14 @@ import { provisionClientToRouter, getLeasesFromRouters, toggleClientOnRouter } f
 let bot: TelegramBot | null = null;
 const userStates = new Map<number, any>();
 
+function formatBytes(bytes: number) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 export function setupTelegramBot() {
   try {
     const db = getDb();
@@ -20,7 +28,7 @@ export function setupTelegramBot() {
     bot = new TelegramBot(token, { polling: true });
 
     bot.onText(/\/(start|menu)/, (msg) => {
-      bot?.sendMessage(msg.chat.id, '🔌 *NexusISP Bot - Menú Principal*\n\nSelecciona una opción abajo o usa:\n`/estado <nombre>` para buscar.', { 
+      bot?.sendMessage(msg.chat.id, '🔌 *VENETISP Bot - Menú Principal*\n\nSelecciona una opción abajo o usa:\n`/estado <nombre>` para buscar.', { 
         parse_mode: 'Markdown',
         reply_markup: {
           keyboard: [
@@ -33,7 +41,8 @@ export function setupTelegramBot() {
 
     const sendClientPanel = (chatId: number, client: any) => {
       const statusIcon = client.disabled ? '🔴 CORTADO' : '🟢 ACTIVO';
-      const text = `👤 *Cliente:* ${client.name}\n🌐 *IP:* ${client.ip}\n🔗 *MAC:* ${client.mac}\n⚡ *Estado:* ${statusIcon}`;
+      const usage = formatBytes(client.totalBytes || 0);
+      const text = `👤 *Cliente:* ${client.name}\n🌐 *IP:* ${client.ip}\n🔗 *MAC:* ${client.mac}\n⚡ *Estado:* ${statusIcon}\n📊 *Consumo:* ${usage}`;
       const actionText = client.disabled ? '🟢 Activar Cliente' : '🔴 Cortar Cliente';
       const actionData = `toggle_client_${client.id}`;
       
@@ -130,7 +139,8 @@ export function setupTelegramBot() {
              );
              
              const statusIcon = newDisabled ? '🔴 CORTADO' : '🟢 ACTIVO';
-             const text = `👤 *Cliente:* ${client.name}\n🌐 *IP:* ${client.ip}\n🔗 *MAC:* ${client.mac}\n⚡ *Estado:* ${statusIcon}`;
+             const usage = formatBytes(client.totalBytes || 0);
+             const text = `👤 *Cliente:* ${client.name}\n🌐 *IP:* ${client.ip}\n🔗 *MAC:* ${client.mac}\n⚡ *Estado:* ${statusIcon}\n📊 *Consumo:* ${usage}`;
              const actionText = newDisabled ? '🟢 Activar Cliente' : '🔴 Cortar Cliente';
              
              if (query.message?.message_id) {

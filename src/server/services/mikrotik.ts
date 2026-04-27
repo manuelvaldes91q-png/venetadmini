@@ -36,12 +36,12 @@ export async function syncRouter(routerId: string) {
         conn.close();
 
         // Basic synchronization logic:
-        // We will match a client by MAC address primarily, then IP.
+        // We will match a client by MAC address primarily, then ip.
         const existingClients = db.prepare('SELECT id, mac, ip, name, profileId FROM clients WHERE routerId = ?').all(router.id) as any[];
         const profiles = db.prepare('SELECT id, name, rxLimit, txLimit FROM profiles').all() as any[];
 
         for (const queue of queues) {
-            // Some queues might just be PCQ or total, we try to see if it's a client
+            // Some queues might just be PCQ o total, we try to see if it's a client
             const target = queue.target ? queue.target.split('/')[0] : null; // typically "192.168.88.10/32"
             if (!target || target === '0.0.0.0' || target.includes(',')) continue;
 
@@ -49,6 +49,15 @@ export async function syncRouter(routerId: string) {
             const mac = macObj ? macObj['mac-address'] : null;
 
             if (!mac) continue;
+
+            // Extract bytes usage: "tx/rx"
+            let txB = 0, rxB = 0;
+            if (queue.bytes) {
+                const bParts = queue.bytes.split('/');
+                txB = parseInt(bParts[0]) || 0;
+                rxB = parseInt(bParts[1]) || 0;
+            }
+            const totalB = txB + rxB;
 
             // Find matching profile or create one based on max-limit "tx/rx"
             let profileId = null;
@@ -79,13 +88,13 @@ export async function syncRouter(routerId: string) {
             const name = queue.name || "Default Queue";
 
             if (existing) {
-                db.prepare('UPDATE clients SET ip = ?, mac = ?, disabled = ?, status = ?, profileId = IFNULL(profileId, ?) WHERE id = ?').run(
-                    target, mac, isDisabled, statusValue, profileId, existing.id
+                db.prepare('UPDATE clients SET ip = ?, mac = ?, disabled = ?, status = ?, profileId = IFNULL(profileId, ?), txBytes = ?, rxBytes = ?, totalBytes = ? WHERE id = ?').run(
+                    target, mac, isDisabled, statusValue, profileId, txB, rxB, totalB, existing.id
                 );
             } else {
                 const newId = crypto.randomUUID();
-                db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, disabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-                    newId, router.id, name, target, mac, statusValue, profileId, isDisabled
+                db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, disabled, txBytes, rxBytes, totalBytes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+                    newId, router.id, name, target, mac, statusValue, profileId, isDisabled, txB, rxB, totalB
                 );
             }
         }

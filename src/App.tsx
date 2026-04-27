@@ -63,12 +63,16 @@ export default function App() {
       <div className="w-72 glass border-r flex flex-col pt-8 pb-4 px-4 shadow-[10px_0_30px_rgba(0,0,0,0.5)] z-10 relative">
         <div className="absolute top-0 left-0 w-full h-[100px] bg-indigo-500/10 blur-3xl rounded-full"></div>
         <div className="flex items-center gap-3 px-2 mb-12 relative z-10">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center neon-border-blue">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#F6D000] via-[#00247D] to-[#CF142B] flex items-center justify-center shadow-[0_0_15px_rgba(246,208,0,0.3)]">
             <Zap className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-xl tracking-tight text-white neon-text-blue">NexusISP</h1>
-            <p className="text-xs text-neutral-400 font-mono">v3.0 Edge Control</p>
+            <h1 className="font-bold text-xl tracking-tight text-white flex items-center gap-1">
+              <span className="text-[#F6D000]">VENET</span>
+              <span className="text-[#00247D]">I</span>
+              <span className="text-[#CF142B]">SP</span>
+            </h1>
+            <p className="text-xs text-neutral-400 font-mono">v4.0 Venezuelan Edition</p>
           </div>
         </div>
 

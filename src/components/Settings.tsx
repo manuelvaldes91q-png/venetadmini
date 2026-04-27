@@ -60,7 +60,7 @@ export function Settings() {
                 </div>
                 <div>
                    <h3 className="text-xl font-semibold text-white">Telegram Bot API</h3>
-                   <p className="text-sm text-neutral-400">NexusISP Assistant Module</p>
+                   <p className="text-sm text-neutral-400">VENETISP Assistant Module</p>
                 </div>
             </div>
 
