@@ -255,17 +255,7 @@ apiRouter.post('/settings', requireAuth, requireAdmin, (req, res) => {
 apiRouter.get('/leases', requireAuth, async (req, res) => {
   try {
      const leases = await getLeasesFromRouters();
-     if (leases.length === 0) {
-        // Fallback to mock if empty (for UI testing)
-        res.json([
-           { id: 'ls-1', ip: '192.168.88.254', mac: 'AA:BB:CC:DD:EE:01', hostname: 'android-123', status: 'bound', routerId: 'rt-1' },
-           { id: 'ls-2', ip: '192.168.88.253', mac: 'AA:BB:CC:DD:EE:02', hostname: 'DESKTOP-PC', status: 'bound', routerId: 'rt-1' },
-           { id: 'ls-3', ip: '192.168.88.252', mac: 'AA:BB:CC:DD:EE:03', hostname: 'iPhone-Admin', status: 'bound', routerId: 'rt-1' },
-           { id: 'ls-4', ip: '192.168.88.251', mac: 'AA:BB:CC:DD:EE:04', hostname: 'Smart-TV', status: 'bound', routerId: 'rt-1' }
-        ]);
-     } else {
-        res.json(leases);
-     }
+     res.json(leases);
   } catch(err) {
      res.status(500).json({ error: String(err) });
   }

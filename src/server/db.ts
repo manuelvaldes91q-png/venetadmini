@@ -63,19 +63,6 @@ export async function initDb() {
     db.prepare('INSERT INTO profiles (id, name, rxLimit, txLimit) VALUES (?, ?, ?, ?)').run('prof-1', '10Mbps', '10M', '5M');
     db.prepare('INSERT INTO profiles (id, name, rxLimit, txLimit) VALUES (?, ?, ?, ?)').run('prof-2', '20Mbps', '20M', '10M');
     db.prepare('INSERT INTO profiles (id, name, rxLimit, txLimit) VALUES (?, ?, ?, ?)').run('prof-3', '50Mbps', '50M', '25M');
-    
-    // Fake router
-    db.prepare('INSERT INTO routers (id, name, host, port, username, password, status) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-      'rt-1', 'Core Router', '192.168.88.1', 8728, 'admin', '', 'connected'
-    );
-
-    // Fake clients
-    db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, disabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-      'cl-1', 'rt-1', 'John Doe - Home', '192.168.88.10', '00:11:22:33:44:55', 'active', 'prof-2', 0
-    );
-    db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, disabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-      'cl-2', 'rt-1', 'Tech Corp S.A.', '192.168.88.11', 'AA:BB:CC:DD:EE:FF', 'cut', 'prof-3', 1
-    );
   }
 
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as {count: number};
