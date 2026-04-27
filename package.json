@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --platform=node --target=node20 --format=cjs --outfile=dist/server.cjs --bundle --external:better-sqlite3 --external:node-routeros --external:node-telegram-bot-api --external:express --external:cors",
+    "build": "vite build && esbuild server.ts --platform=node --target=node20 --format=cjs --outfile=dist/server.cjs --bundle --external:better-sqlite3 --external:node-routeros --external:node-telegram-bot-api --external:express --external:cors --external:vite",
     "preview": "vite preview",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
