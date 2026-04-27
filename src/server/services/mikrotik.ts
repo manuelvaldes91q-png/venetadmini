@@ -72,7 +72,9 @@ export async function syncRouter(routerId: string) {
 
             // Sync with local DB
             const existing = existingClients.find(c => c.mac === mac || c.ip === target);
-            const isDisabled = queue.disabled === "true" ? 1 : 0;
+            const isQueueDisabled = queue.disabled === "true";
+            const isArpDisabled = macObj && macObj.disabled === "true";
+            const isDisabled = (isQueueDisabled || isArpDisabled) ? 1 : 0;
             const statusValue = isDisabled ? 'cut' : 'active';
             const name = queue.name || "Default Queue";
 
