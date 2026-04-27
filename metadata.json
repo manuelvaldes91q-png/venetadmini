@@ -1,0 +1,6 @@
+{
+  "name": "NexusISP - Smart MikroTik Manager",
+  "description": "Next-generation ISP management system with MikroTik integration, automated provisioning, billing, and Telegram bot.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
