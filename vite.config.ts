@@ -6,6 +6,19 @@ import {defineConfig, loadEnv} from 'vite';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
+    css: {
+      transformer: 'lightningcss',
+      lightningcss: {
+        targets: {
+          chrome: 109 << 16,
+          firefox: 115 << 16
+        }
+      }
+    },
+    build: {
+      cssMinify: 'lightningcss',
+      target: ['chrome109', 'firefox115']
+    },
     plugins: [react(), tailwindcss()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),

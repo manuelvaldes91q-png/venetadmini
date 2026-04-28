@@ -135,7 +135,7 @@ export function UsersAdmin() {
                            </td>
                            <td className="px-4 py-3 text-right pr-6">
                                {currentUser?.id !== u.id && (
-                                   <button onClick={() => handleDelete(u.id, u.username)} className="p-2 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors opacity-0 group-hover:opacity-100">
+                                   <button onClick={() => handleDelete(u.id, u.username)} className="p-2 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors inline-block">
                                        <Trash2 className="w-4 h-4" />
                                    </button>
                                )}

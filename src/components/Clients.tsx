@@ -252,7 +252,7 @@ export function Clients() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-right pr-6">
-                    <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-3 transition-opacity">
                       
                       <button 
                          onClick={() => handleToggle(client.id, client.disabled)}
