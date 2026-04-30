@@ -61,6 +61,19 @@ export async function initDb() {
   `);
 
   try {
+    db.exec('ALTER TABLE routers ADD COLUMN salidaTx INTEGER DEFAULT 0;');
+  } catch(e) {}
+  try {
+    db.exec('ALTER TABLE routers ADD COLUMN salidaRx INTEGER DEFAULT 0;');
+  } catch(e) {}
+  try {
+    db.exec('ALTER TABLE routers ADD COLUMN lastSalidaTx INTEGER DEFAULT 0;');
+  } catch(e) {}
+  try {
+    db.exec('ALTER TABLE routers ADD COLUMN lastSalidaRx INTEGER DEFAULT 0;');
+  } catch(e) {}
+
+  try {
     db.exec('ALTER TABLE clients ADD COLUMN txBytes INTEGER DEFAULT 0;');
   } catch(e) {}
   try {

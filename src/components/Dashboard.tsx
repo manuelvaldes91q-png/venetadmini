@@ -4,7 +4,13 @@ import { Activity, Users, Zap, Globe, BarChart3 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 
 export function Dashboard() {
-  const { stats, clients } = useStore();
+  const { stats, clients, routers } = useStore();
+
+  const totalSalidaBytes = routers.reduce((acc, r) => acc + ((r.salidaTx || 0) + (r.salidaRx || 0)), 0);
+  const LIMIT_2TB = 2 * 1024 * 1024 * 1024 * 1024; // 2 TB
+  const percentage = (totalSalidaBytes / LIMIT_2TB) * 100;
+  const isWarning = percentage >= 80;
+  const isDanger = percentage >= 95;
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -46,17 +52,34 @@ export function Dashboard() {
           <p className="text-4xl font-bold text-white relative z-10">{stats?.activeClients || 0}</p>
         </Card>
 
-        <Card className="glass border-white/5 bg-white/5 p-6 relative overflow-hidden group">
+        <Card className={`glass border-white/5 bg-white/5 p-6 relative overflow-hidden group ${isDanger ? 'border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.3)]' : isWarning ? 'border-[#F6D000]/50' : ''}`}>
           <div className="absolute -right-10 -top-10 w-32 h-32 bg-[#00247D]/10 rounded-full blur-3xl group-hover:bg-[#00247D]/20 transition-all"></div>
           <div className="flex items-center justify-between mb-4 relative z-10">
-            <h3 className="text-neutral-400 font-medium">Capacidad Total Red</h3>
+            <h3 className={`font-medium ${isDanger ? 'text-rose-400' : isWarning ? 'text-[#F6D000]' : 'text-neutral-400'}`}>Consumo SALIDA</h3>
             <div className="w-8 h-8 rounded-full bg-[#00247D]/10 flex items-center justify-center">
               <Activity className="w-4 h-4 text-[#00247D]" />
             </div>
           </div>
           <div className="flex items-end gap-2 relative z-10">
-            <p className="text-4xl font-bold text-white">{clients.length * 10}</p>
-            <span className="text-sm text-[#00247D] mb-1 font-mono">Mbps Pool</span>
+            <p className="text-4xl font-bold text-white">{formatBytes(totalSalidaBytes)}</p>
+          </div>
+          
+          <div className="mt-4 relative z-10">
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-neutral-500">Límite: 2 TB / Mes</span>
+              <span className={`${isDanger ? 'text-rose-400 font-bold' : isWarning ? 'text-[#F6D000]' : 'text-[#00247D]'}`}>{percentage.toFixed(1)}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full ${isDanger ? 'bg-rose-500' : isWarning ? 'bg-[#F6D000]' : 'bg-[#00247D]'}`} 
+                style={{ width: `${Math.min(percentage, 100)}%` }}
+              ></div>
+            </div>
+            {isWarning && (
+                <p className={`text-xs mt-2 ${isDanger ? 'text-rose-400' : 'text-[#F6D000]'}`}>
+                  {isDanger ? '🚨 Capacidad crítica excediendo el 95%.' : '⚠️ Advertencia: Consumo cerca del límite.'}
+                </p>
+            )}
           </div>
         </Card>
 

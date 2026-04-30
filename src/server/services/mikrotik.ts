@@ -32,8 +32,34 @@ export async function syncRouter(routerId: string) {
         // Fetch ARP
         const arp = await conn.write('/ip/arp/print');
 
+        // Fetch Interfaces
+        const interfaces = await conn.write('/interface/print');
+
         // Close connection
         conn.close();
+
+        // Update SALIDA stats
+        const salidaInt = interfaces.find((i: any) => i.name === 'SALIDA');
+        if (salidaInt) {
+            let txB = parseInt(salidaInt['tx-byte'] || '0', 10);
+            let rxB = parseInt(salidaInt['rx-byte'] || '0', 10);
+
+            const rData = db.prepare('SELECT salidaTx, salidaRx, lastSalidaTx, lastSalidaRx FROM routers WHERE id = ?').get(router.id) as any;
+            if (rData) {
+                let deltaTx = txB - (rData.lastSalidaTx || 0);
+                let deltaRx = rxB - (rData.lastSalidaRx || 0);
+
+                if (deltaTx < 0) deltaTx = txB;
+                if (deltaRx < 0) deltaRx = rxB;
+
+                let newTx = (rData.salidaTx || 0) + deltaTx;
+                let newRx = (rData.salidaRx || 0) + deltaRx;
+                
+                db.prepare('UPDATE routers SET salidaTx = ?, salidaRx = ?, lastSalidaTx = ?, lastSalidaRx = ? WHERE id = ?').run(
+                    newTx, newRx, txB, rxB, router.id
+                );
+            }
+        }
 
         // Basic synchronization logic:
         // We will match a client by MAC address primarily, then ip.
@@ -269,6 +295,10 @@ export function startMikrotikSync() {
              // Reset accumulators, but keep the current MikroTik counter cache (lastQueueTx) 
              // so the next sync doesn't re-add the current queue bytes.
              db.prepare('UPDATE clients SET txBytes = 0, rxBytes = 0, totalBytes = 0').run();
+             // Reset router interfaces accumulated counters
+             try {
+                db.prepare('UPDATE routers SET salidaTx = 0, salidaRx = 0').run();
+             } catch(e){}
              if (lastResetSetting) {
                  db.prepare('UPDATE settings SET value = ? WHERE key = ?').run(currentMonthStr, 'last_monthly_reset');
              } else {

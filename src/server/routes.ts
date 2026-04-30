@@ -82,7 +82,7 @@ apiRouter.delete('/users/:id', requireAuth, requireAdmin, (req: any, res) => {
 // ROUTERS
 apiRouter.get('/routers', requireAuth, (req, res) => {
   const db = getDb();
-  const routers = db.prepare('SELECT id, name, host, port, username, status, lastCheck FROM routers').all();
+  const routers = db.prepare('SELECT id, name, host, port, username, status, lastCheck, salidaTx, salidaRx FROM routers').all();
   res.json(routers);
 });
 
