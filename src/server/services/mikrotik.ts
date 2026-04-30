@@ -37,7 +37,7 @@ export async function syncRouter(routerId: string) {
 
         // Basic synchronization logic:
         // We will match a client by MAC address primarily, then ip.
-        const existingClients = db.prepare('SELECT id, mac, ip, name, profileId FROM clients WHERE routerId = ?').all(router.id) as any[];
+        const existingClients = db.prepare('SELECT id, mac, ip, name, profileId, txBytes, rxBytes, lastQueueTx, lastQueueRx FROM clients WHERE routerId = ?').all(router.id) as any[];
         const profiles = db.prepare('SELECT id, name, rxLimit, txLimit FROM profiles').all() as any[];
 
         for (const queue of queues) {
@@ -88,13 +88,24 @@ export async function syncRouter(routerId: string) {
             const name = queue.name || "Default Queue";
 
             if (existing) {
-                db.prepare('UPDATE clients SET ip = ?, mac = ?, disabled = ?, status = ?, profileId = IFNULL(profileId, ?), txBytes = ?, rxBytes = ?, totalBytes = ? WHERE id = ?').run(
-                    target, mac, isDisabled, statusValue, profileId, txB, rxB, totalB, existing.id
+                let deltaTx = txB - (existing.lastQueueTx || 0);
+                let deltaRx = rxB - (existing.lastQueueRx || 0);
+
+                if (deltaTx < 0) deltaTx = txB;
+                if (deltaRx < 0) deltaRx = rxB;
+
+                let newTx = (existing.txBytes || 0) + deltaTx;
+                let newRx = (existing.rxBytes || 0) + deltaRx;
+                let newTotal = newTx + newRx;
+
+                db.prepare('UPDATE clients SET ip = ?, mac = ?, disabled = ?, status = ?, profileId = IFNULL(profileId, ?), lastQueueTx = ?, lastQueueRx = ?, txBytes = ?, rxBytes = ?, totalBytes = ? WHERE id = ?').run(
+                    target, mac, isDisabled, statusValue, profileId, txB, rxB, newTx, newRx, newTotal, existing.id
                 );
             } else {
                 const newId = crypto.randomUUID();
-                db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, disabled, txBytes, rxBytes, totalBytes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-                    newId, router.id, name, target, mac, statusValue, profileId, isDisabled, txB, rxB, totalB
+                const newTotal = txB + rxB;
+                db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, disabled, txBytes, rxBytes, totalBytes, lastQueueTx, lastQueueRx) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+                    newId, router.id, name, target, mac, statusValue, profileId, isDisabled, txB, rxB, newTotal, txB, rxB
                 );
             }
         }
@@ -247,6 +258,25 @@ export function startMikrotikSync() {
   syncInterval = setInterval(async () => {
     try {
       const db = getDb();
+
+      // Check if it's the 5th of the month
+      const now = new Date();
+      if (now.getDate() === 5) {
+         const currentMonthStr = `${now.getFullYear()}-${now.getMonth()}`;
+         const lastResetSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get('last_monthly_reset') as {value: string} | undefined;
+         if (!lastResetSetting || lastResetSetting.value !== currentMonthStr) {
+             console.log('Performing monthly data reset (5th day of month)');
+             // Reset accumulators, but keep the current MikroTik counter cache (lastQueueTx) 
+             // so the next sync doesn't re-add the current queue bytes.
+             db.prepare('UPDATE clients SET txBytes = 0, rxBytes = 0, totalBytes = 0').run();
+             if (lastResetSetting) {
+                 db.prepare('UPDATE settings SET value = ? WHERE key = ?').run(currentMonthStr, 'last_monthly_reset');
+             } else {
+                 db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('last_monthly_reset', currentMonthStr);
+             }
+         }
+      }
+
       const routers = db.prepare('SELECT id FROM routers').all() as {id: string}[];
       for (const router of routers) {
           await syncRouter(router.id);

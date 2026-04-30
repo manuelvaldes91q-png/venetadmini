@@ -69,6 +69,12 @@ export async function initDb() {
   try {
     db.exec('ALTER TABLE clients ADD COLUMN totalBytes INTEGER DEFAULT 0;');
   } catch(e) {}
+  try {
+    db.exec('ALTER TABLE clients ADD COLUMN lastQueueTx INTEGER DEFAULT 0;');
+  } catch(e) {}
+  try {
+    db.exec('ALTER TABLE clients ADD COLUMN lastQueueRx INTEGER DEFAULT 0;');
+  } catch(e) {}
 
   // Seed DB if profiles are empty
   const profileCount = db.prepare('SELECT COUNT(*) as count FROM profiles').get() as {count: number};
