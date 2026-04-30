@@ -35,15 +35,45 @@ export async function syncRouter(routerId: string) {
         // Fetch Interfaces
         const interfaces = await conn.write('/interface/print');
 
-        // Close connection
-        conn.close();
-
         // Update SALIDA stats
-        const salidaInt = interfaces.find((i: any) => i.name === 'SALIDA');
-        if (salidaInt) {
-            let txB = parseInt(salidaInt['tx-byte'] || '0', 10);
-            let rxB = parseInt(salidaInt['rx-byte'] || '0', 10);
+        let salidaInt = interfaces.find((i: any) => i.name && i.name.trim().toUpperCase() === 'SALIDA');
+        
+        let txB = 0;
+        let rxB = 0;
 
+        if (salidaInt) {
+            txB = parseInt(salidaInt['tx-byte'] || '0', 10);
+            rxB = parseInt(salidaInt['rx-byte'] || '0', 10);
+        }
+
+        // If bytes are 0 or NaN, we might need a more specific query or stats-detail
+        if (isNaN(txB) || txB === 0) {
+            try {
+                // In some RouterOS versions, interface traffic is retrieved via print stats-detail
+                const statsReply = await conn.write('/interface/print', ['stats-detail']).catch(() => []);
+                const altSalida = statsReply.find((i: any) => i.name && i.name.trim().toUpperCase() === 'SALIDA');
+                if (altSalida && (altSalida['tx-byte'] || altSalida['rx-byte'])) {
+                    txB = parseInt(altSalida['tx-byte'] || '0', 10);
+                    rxB = parseInt(altSalida['rx-byte'] || '0', 10);
+                } else {
+                    const printReply = await conn.write('/interface/print', ['?name=SALIDA']).catch(() => []);
+                    if (printReply.length > 0) {
+                        txB = parseInt(printReply[0]['tx-byte'] || '0', 10);
+                        rxB = parseInt(printReply[0]['rx-byte'] || '0', 10);
+                    }
+                }
+            } catch(e) {
+                console.error("Error fetching specific SALIDA stats", e);
+            }
+        }
+        
+        // Close connection now that we are done with it
+        conn.close();
+        
+        if (isNaN(txB)) txB = 0;
+        if (isNaN(rxB)) rxB = 0;
+
+        if (txB > 0 || rxB > 0 || salidaInt) {
             const rData = db.prepare('SELECT salidaTx, salidaRx, lastSalidaTx, lastSalidaRx FROM routers WHERE id = ?').get(router.id) as any;
             if (rData) {
                 let deltaTx = txB - (rData.lastSalidaTx || 0);
