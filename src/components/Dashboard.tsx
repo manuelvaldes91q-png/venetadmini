@@ -132,6 +132,7 @@ export function Dashboard() {
                  <Tooltip 
                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                    contentStyle={{ backgroundColor: '#171717', borderColor: '#333', borderRadius: '12px', fontSize: '12px' }}
+                   itemStyle={{ color: '#e5e5e5' }}
                    formatter={(value: number) => [`${value.toFixed(2)} GB`, 'Consumo']}
                    labelFormatter={(label, payload) => {
                      const full = payload?.[0]?.payload?.fullName || label;
@@ -155,16 +156,16 @@ export function Dashboard() {
               .sort((a, b) => (b.totalBytes || 0) - (a.totalBytes || 0))
               .slice(0, 10).map((client, i) => (
                 <div key={client.id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-all border border-white/5 group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-neutral-900 border border-white/5 flex items-center justify-center font-mono text-[10px] text-neutral-500 group-hover:border-indigo-500/30 transition-colors">
+                  <div className="flex items-center gap-3 overflow-hidden flex-1 mr-2">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-neutral-900 border border-white/5 flex items-center justify-center font-mono text-[10px] text-neutral-500 group-hover:border-indigo-500/30 transition-colors">
                       {i + 1}
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-white truncate w-[180px] sm:w-[220px]" title={client.name}>{client.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-white truncate" title={client.name}>{client.name}</p>
                       <p className="text-[10px] text-neutral-500 font-mono italic">{client.ip}</p>
                     </div>
                   </div>
-                  <div className="text-right whitespace-nowrap pl-2">
+                  <div className="text-right whitespace-nowrap pl-2 flex-shrink-0">
                     <div className="text-sm font-bold text-[#F6D000]">
                       {formatBytes(client.totalBytes || 0)}
                     </div>
