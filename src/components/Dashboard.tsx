@@ -25,7 +25,7 @@ export function Dashboard() {
     .sort((a, b) => (b.totalBytes || 0) - (a.totalBytes || 0))
     .slice(0, 10)
     .map(c => ({
-      name: c.name.length > 15 ? c.name.substring(0, 12) + '...' : c.name,
+      name: c.name.length > 20 ? c.name.substring(0, 17) + '...' : c.name,
       fullName: c.name,
       total: (c.totalBytes || 0) / (1024 * 1024 * 1024), // GB
       rawTotal: c.totalBytes || 0
@@ -133,7 +133,10 @@ export function Dashboard() {
                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                    contentStyle={{ backgroundColor: '#171717', borderColor: '#333', borderRadius: '12px', fontSize: '12px' }}
                    formatter={(value: number) => [`${value.toFixed(2)} GB`, 'Consumo']}
-                   labelFormatter={(label) => <span className="text-indigo-400 font-bold">{label}</span>}
+                   labelFormatter={(label, payload) => {
+                     const full = payload?.[0]?.payload?.fullName || label;
+                     return <span className="text-indigo-400 font-bold">{full}</span>;
+                   }}
                  />
                  <Bar dataKey="total" radius={[4, 4, 0, 0]} barSize={35}>
                    {topClientsData.map((entry, index) => (
@@ -157,15 +160,15 @@ export function Dashboard() {
                       {i + 1}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-white truncate max-w-[120px]">{client.name}</p>
+                      <p className="text-sm font-medium text-white truncate w-[180px] sm:w-[220px]" title={client.name}>{client.name}</p>
                       <p className="text-[10px] text-neutral-500 font-mono italic">{client.ip}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-xs font-bold text-white">
+                  <div className="text-right whitespace-nowrap pl-2">
+                    <div className="text-sm font-bold text-[#F6D000]">
                       {formatBytes(client.totalBytes || 0)}
                     </div>
-                    <div className="text-[9px] text-neutral-600 uppercase font-mono">Acumulado</div>
+                    <div className="text-[9px] text-neutral-500 uppercase font-mono mt-0.5">Acumulado</div>
                   </div>
                 </div>
               ))}
