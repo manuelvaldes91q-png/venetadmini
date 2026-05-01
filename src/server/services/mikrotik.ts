@@ -125,7 +125,15 @@ export async function syncRouter(routerId: string) {
                     let prof = profiles.find(p => p.txLimit === tx && p.rxLimit === rx);
                     if (!prof) {
                         const newProfId = crypto.randomUUID();
-                        const newProfName = `${parseInt(rx)/1000000}M/${parseInt(tx)/1000000}M`; // Rough MB naming
+                        let rxDisplay = rx;
+                        let txDisplay = tx;
+                        if (!rx.includes('M') && parseInt(rx) >= 1000) {
+                            rxDisplay = `${Math.round(parseInt(rx)/1000000)}M`;
+                        }
+                        if (!tx.includes('M') && parseInt(tx) >= 1000) {
+                            txDisplay = `${Math.round(parseInt(tx)/1000000)}M`;
+                        }
+                        const newProfName = `${rxDisplay} / ${txDisplay} (Auto)`;
                         db.prepare('INSERT INTO profiles (id, name, rxLimit, txLimit) VALUES (?, ?, ?, ?)').run(newProfId, newProfName, rx, tx);
                         profiles.push({ id: newProfId, name: newProfName, rxLimit: rx, txLimit: tx });
                         profileId = newProfId;
@@ -154,7 +162,7 @@ export async function syncRouter(routerId: string) {
                 let newRx = (existing.rxBytes || 0) + deltaRx;
                 let newTotal = newTx + newRx;
 
-                db.prepare('UPDATE clients SET ip = ?, mac = ?, disabled = ?, status = ?, profileId = IFNULL(profileId, ?), lastQueueTx = ?, lastQueueRx = ?, txBytes = ?, rxBytes = ?, totalBytes = ? WHERE id = ?').run(
+                db.prepare('UPDATE clients SET ip = ?, mac = ?, disabled = ?, status = ?, profileId = ?, lastQueueTx = ?, lastQueueRx = ?, txBytes = ?, rxBytes = ?, totalBytes = ? WHERE id = ?').run(
                     target, mac, isDisabled, statusValue, profileId, txB, rxB, newTx, newRx, newTotal, existing.id
                 );
             } else {

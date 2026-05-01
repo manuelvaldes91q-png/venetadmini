@@ -215,7 +215,27 @@ export function Clients() {
                     </div>
                   </td>
                   <td className="px-4 py-3 font-mono">
-                    <div className="text-indigo-300">{client.ip}</div>
+                    <div className="flex items-center gap-2">
+                       <span className="text-indigo-300 font-bold">{client.ip}</span>
+                       {(() => {
+                           const octet = parseInt(client.ip.split('.')[3] || '0', 10);
+                           let provider = '';
+                           let provColor = '';
+                           if (octet >= 3 && octet <= 130) {
+                               provider = 'Inter';
+                               provColor = 'text-blue-400 bg-blue-900/20 border-blue-900/50';
+                           } else if (octet >= 131 && octet <= 250) {
+                               provider = 'Airtek';
+                               provColor = 'text-purple-400 bg-purple-900/20 border-purple-900/50';
+                           }
+                           
+                           return provider ? (
+                               <Badge variant="outline" className={`text-[9px] uppercase px-1.5 py-0 border ${provColor}`}>
+                                  {provider}
+                               </Badge>
+                           ) : null;
+                       })()}
+                    </div>
                     <div className="text-xs text-neutral-500 mt-1">{client.mac}</div>
                   </td>
                   <td className="px-4 py-3">
