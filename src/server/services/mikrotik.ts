@@ -339,18 +339,22 @@ export async function setClientProviderOnRouter(routerId: string, ip: string, pr
 
         // 4. Force traffic to shift immediately by clearing existing connections
         try {
-            const safeIp = ip.replace(/\./g, '\\.');
-            const connectionsSrc = await conn.write('/ip/firewall/connection/print', [`?~src-address=^${safeIp}:`]);
-            for (const c of connectionsSrc) {
-                if (c['.id']) await conn.write('/ip/firewall/connection/remove', [`=.id=${c['.id']}`]);
-            }
-            // Also clear connections where destination was the client (just in case)
-            const connectionsDst = await conn.write('/ip/firewall/connection/print', [`?~dst-address=^${safeIp}:`]);
-            for (const c of connectionsDst) {
-                if (c['.id']) await conn.write('/ip/firewall/connection/remove', [`=.id=${c['.id']}`]);
+            const scriptName = `clear_${ip.replace(/\./g, '_')}_${Date.now()}`;
+            const scriptSource = `/ip firewall connection remove [find src-address~"${ip}:" or dst-address~"${ip}:"];`;
+            
+            await conn.write('/system/script/add', [
+                `=name=${scriptName}`,
+                `=source=${scriptSource}`
+            ]);
+            
+            const addedScripts = await conn.write('/system/script/print', [`?name=${scriptName}`]);
+            if (addedScripts && addedScripts.length > 0) {
+                const scriptId = addedScripts[0]['.id'];
+                await conn.write('/system/script/run', [`=.id=${scriptId}`]);
+                await conn.write('/system/script/remove', [`=.id=${scriptId}`]);
             }
         } catch(e) {
-            console.error('Failed to clear connections:', e);
+            console.error('Failed to clear connections via script:', e);
         }
 
         conn.close();
