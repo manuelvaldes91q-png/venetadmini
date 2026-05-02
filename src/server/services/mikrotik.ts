@@ -266,6 +266,13 @@ export async function toggleClientOnRouter(routerId: string, ip: string, disable
     }
 }
 
+function ipToLong(ip: string) {
+    return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+}
+function longToIp(long: number) {
+    return [ (long >>> 24), (long >> 16) & 255, (long >> 8) & 255, long & 255 ].join('.');
+}
+
 export async function setClientProviderOnRouter(routerId: string, ip: string, provider: 'Inter' | 'Airtek' | null) {
     const db = getDb();
     const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId) as any;
@@ -277,15 +284,50 @@ export async function setClientProviderOnRouter(routerId: string, ip: string, pr
         
         // 1. Fetch current lists
         const addressLists = await conn.write('/ip/firewall/address-list/print');
-        const interEntry = addressLists.find((al: any) => al.list === 'Grupo_Inter' && al.address === ip);
-        const airtekEntry = addressLists.find((al: any) => al.list === 'Grupo_Airtek' && al.address === ip);
+        const targetIpLong = ipToLong(ip);
 
-        // 2. Clear existing entries if they exist
-        if (interEntry) {
-            await conn.write('/ip/firewall/address-list/remove', [ `=.id=${interEntry['.id']}` ]);
-        }
-        if (airtekEntry) {
-            await conn.write('/ip/firewall/address-list/remove', [ `=.id=${airtekEntry['.id']}` ]);
+        // 2. Clear existing entries for this IP, and split any ranges if the IP is inside them
+        for (const entry of addressLists) {
+            if (entry.list !== 'Grupo_Inter' && entry.list !== 'Grupo_Airtek') continue;
+            
+            let startEnd = null;
+            if (entry.address.includes('-')) {
+                const parts = entry.address.split('-');
+                if (parts.length === 2 && parts[0].includes('.') && parts[1].includes('.')) {
+                    startEnd = { start: ipToLong(parts[0]), end: ipToLong(parts[1]) };
+                }
+            } else if (entry.address.includes('/')) {
+                const [base, maskStr] = entry.address.split('/');
+                const mask = parseInt(maskStr, 10);
+                if (!isNaN(mask) && base.includes('.')) {
+                   const start = (ipToLong(base) & (~((1 << (32 - mask)) - 1))) >>> 0;
+                   const end = (start + (1 << (32 - mask)) - 1) >>> 0;
+                   startEnd = { start, end };
+                }
+            } else if (entry.address.includes('.')) {
+                startEnd = { start: ipToLong(entry.address), end: ipToLong(entry.address) };
+            }
+            
+            if (startEnd && targetIpLong >= startEnd.start && targetIpLong <= startEnd.end) {
+                // IP is inside this entry! Remove the original entry.
+                await conn.write('/ip/firewall/address-list/remove', [ `=.id=${entry['.id']}` ]);
+                
+                // If it was a range/subnet containing more than one IP, split it.
+                if (startEnd.start !== startEnd.end) {
+                    if (targetIpLong > startEnd.start) {
+                       const newLower = targetIpLong - 1 === startEnd.start 
+                           ? longToIp(startEnd.start) 
+                           : `${longToIp(startEnd.start)}-${longToIp(targetIpLong - 1)}`;
+                       await conn.write('/ip/firewall/address-list/add', [ `=list=${entry.list}`, `=address=${newLower}` ]);
+                    }
+                    if (targetIpLong < startEnd.end) {
+                       const newUpper = targetIpLong + 1 === startEnd.end
+                           ? longToIp(startEnd.end)
+                           : `${longToIp(targetIpLong + 1)}-${longToIp(startEnd.end)}`;
+                       await conn.write('/ip/firewall/address-list/add', [ `=list=${entry.list}`, `=address=${newUpper}` ]);
+                    }
+                }
+            }
         }
 
         // 3. Add to new list if provider is specified
