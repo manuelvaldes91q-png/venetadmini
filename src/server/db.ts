@@ -40,6 +40,7 @@ export async function initDb() {
       mac TEXT,
       status TEXT,
       profileId TEXT,
+      provider TEXT,
       disabled INTEGER DEFAULT 0,
       txBytes INTEGER DEFAULT 0,
       rxBytes INTEGER DEFAULT 0,
@@ -87,6 +88,9 @@ export async function initDb() {
   } catch(e) {}
   try {
     db.exec('ALTER TABLE clients ADD COLUMN lastQueueRx INTEGER DEFAULT 0;');
+  } catch(e) {}
+  try {
+    db.exec('ALTER TABLE clients ADD COLUMN provider TEXT;');
   } catch(e) {}
 
   // Seed DB if profiles are empty

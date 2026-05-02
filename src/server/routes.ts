@@ -1,6 +1,13 @@
 import { Router } from 'express';
 import { getDb } from './db.js';
-import { syncRouter, provisionClientToRouter, toggleClientOnRouter, deleteClientOnRouter, getLeasesFromRouters } from './services/mikrotik.js';
+import { 
+    syncRouter, 
+    provisionClientToRouter, 
+    toggleClientOnRouter, 
+    deleteClientOnRouter, 
+    getLeasesFromRouters,
+    setClientProviderOnRouter
+} from './services/mikrotik.js';
 import crypto from 'crypto';
 
 export const apiRouter = Router();
@@ -117,16 +124,20 @@ apiRouter.get('/clients', requireAuth, (req, res) => {
 apiRouter.post('/clients', requireAuth, async (req: any, res) => {
   if (req.user.role === 'readonly') return res.status(403).json({ error: 'Readonly users cannot modify clients' });
   const db = getDb();
-  const { routerId, name, ip, mac, profileId } = req.body;
+  const { routerId, name, ip, mac, profileId, provider } = req.body;
   const id = crypto.randomUUID();
   try {
     const profile = db.prepare('SELECT * FROM profiles WHERE id = ?').get(profileId) as any;
     const limit = profile ? `${profile.txLimit}/${profile.rxLimit}` : '0/0';
 
     await provisionClientToRouter(routerId, name, ip, mac, limit);
+    
+    if (provider) {
+        await setClientProviderOnRouter(routerId, ip, provider);
+    }
 
-    db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, disabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id, routerId, name, ip, mac, 'active', profileId, 0);
+    db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, provider, disabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, routerId, name, ip, mac, 'active', profileId, provider, 0);
 
     res.json({ id, status: 'success' });
   } catch (err) {
@@ -169,6 +180,24 @@ apiRouter.put('/clients/:id/profile', requireAuth, async (req: any, res) => {
         await provisionClientToRouter(client.routerId, client.name, client.ip, client.mac, limit);
     }
     db.prepare('UPDATE clients SET profileId = ? WHERE id = ?').run(profileId, id);
+    res.json({ success: true });
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+apiRouter.put('/clients/:id/provider', requireAuth, async (req: any, res) => {
+  if (req.user.role === 'readonly') return res.status(403).json({ error: 'Readonly' });
+  const db = getDb();
+  const { id } = req.params;
+  const { provider } = req.body; // 'Inter', 'Airtek', or null
+  try {
+    const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(id) as any;
+    if(!client) return res.status(404).json({ error: 'Client not found' });
+    
+    await setClientProviderOnRouter(client.routerId, client.ip, provider);
+    
+    db.prepare('UPDATE clients SET provider = ? WHERE id = ?').run(provider, id);
     res.json({ success: true });
   } catch(err) {
     res.status(500).json({ error: String(err) });

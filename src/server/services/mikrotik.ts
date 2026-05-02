@@ -35,6 +35,9 @@ export async function syncRouter(routerId: string) {
         // Fetch Interfaces
         const interfaces = await conn.write('/interface/print');
 
+        // Fetch Address Lists
+        const addressLists = await conn.write('/ip/firewall/address-list/print');
+
         // Update SALIDA stats
         let salidaInt = interfaces.find((i: any) => i.name && i.name.trim().toUpperCase() === 'SALIDA');
         
@@ -151,6 +154,14 @@ export async function syncRouter(routerId: string) {
             const statusValue = isDisabled ? 'cut' : 'active';
             const name = queue.name || "Default Queue";
 
+            // Determine provider from address-lists
+            let providerDetected = null;
+            const inInter = addressLists.find((al: any) => al.list === 'Grupo_Inter' && al.address === target);
+            const inAirtek = addressLists.find((al: any) => al.list === 'Grupo_Airtek' && al.address === target);
+            
+            if (inInter) providerDetected = 'Inter';
+            else if (inAirtek) providerDetected = 'Airtek';
+
             if (existing) {
                 let deltaTx = txB - (existing.lastQueueTx || 0);
                 let deltaRx = rxB - (existing.lastQueueRx || 0);
@@ -162,14 +173,14 @@ export async function syncRouter(routerId: string) {
                 let newRx = (existing.rxBytes || 0) + deltaRx;
                 let newTotal = newTx + newRx;
 
-                db.prepare('UPDATE clients SET ip = ?, mac = ?, disabled = ?, status = ?, profileId = ?, lastQueueTx = ?, lastQueueRx = ?, txBytes = ?, rxBytes = ?, totalBytes = ? WHERE id = ?').run(
-                    target, mac, isDisabled, statusValue, profileId, txB, rxB, newTx, newRx, newTotal, existing.id
+                db.prepare('UPDATE clients SET ip = ?, mac = ?, disabled = ?, status = ?, profileId = ?, provider = ?, lastQueueTx = ?, lastQueueRx = ?, txBytes = ?, rxBytes = ?, totalBytes = ? WHERE id = ?').run(
+                    target, mac, isDisabled, statusValue, profileId, providerDetected, txB, rxB, newTx, newRx, newTotal, existing.id
                 );
             } else {
                 const newId = crypto.randomUUID();
                 const newTotal = txB + rxB;
-                db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, disabled, txBytes, rxBytes, totalBytes, lastQueueTx, lastQueueRx) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-                    newId, router.id, name, target, mac, statusValue, profileId, isDisabled, txB, rxB, newTotal, txB, rxB
+                db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, provider, disabled, txBytes, rxBytes, totalBytes, lastQueueTx, lastQueueRx) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+                    newId, router.id, name, target, mac, statusValue, profileId, providerDetected, isDisabled, txB, rxB, newTotal, txB, rxB
                 );
             }
         }
@@ -251,6 +262,42 @@ export async function toggleClientOnRouter(routerId: string, ip: string, disable
         conn.close();
     } catch(err) {
         console.error('MikroTik Toggle Error:', err);
+        throw err;
+    }
+}
+
+export async function setClientProviderOnRouter(routerId: string, ip: string, provider: 'Inter' | 'Airtek' | null) {
+    const db = getDb();
+    const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId) as any;
+    if (!router) return;
+
+    try {
+        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '' });
+        await conn.connect();
+        
+        // 1. Fetch current lists
+        const addressLists = await conn.write('/ip/firewall/address-list/print');
+        const interEntry = addressLists.find((al: any) => al.list === 'Grupo_Inter' && al.address === ip);
+        const airtekEntry = addressLists.find((al: any) => al.list === 'Grupo_Airtek' && al.address === ip);
+
+        // 2. Clear existing entries if they exist
+        if (interEntry) {
+            await conn.write('/ip/firewall/address-list/remove', [ `=.id=${interEntry['.id']}` ]);
+        }
+        if (airtekEntry) {
+            await conn.write('/ip/firewall/address-list/remove', [ `=.id=${airtekEntry['.id']}` ]);
+        }
+
+        // 3. Add to new list if provider is specified
+        if (provider === 'Inter') {
+            await conn.write('/ip/firewall/address-list/add', [ `=list=Grupo_Inter`, `=address=${ip}` ]);
+        } else if (provider === 'Airtek') {
+            await conn.write('/ip/firewall/address-list/add', [ `=list=Grupo_Airtek`, `=address=${ip}` ]);
+        }
+
+        conn.close();
+    } catch(err) {
+        console.error('MikroTik Update Provider Error:', err);
         throw err;
     }
 }

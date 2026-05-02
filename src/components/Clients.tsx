@@ -8,7 +8,7 @@ import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
 
 export function Clients() {
-  const { clients, leases, fetchLeases, routers, profiles, addClient, toggleClient, deleteClient, updateClientProfile, user } = useStore();
+  const { clients, leases, fetchLeases, routers, profiles, addClient, toggleClient, deleteClient, updateClientProfile, updateClientProvider, user } = useStore();
   const [search, setSearch] = useState('');
   
   const [showProvision, setShowProvision] = useState(false);
@@ -17,6 +17,7 @@ export function Clients() {
   const [provName, setProvName] = useState('');
   const [provRouter, setProvRouter] = useState('');
   const [provProfile, setProvProfile] = useState('');
+  const [provProvider, setProvProvider] = useState<string>('');
 
   useEffect(() => {
     fetchLeases();
@@ -48,7 +49,8 @@ export function Clients() {
           ip: selectedLease.ip,
           mac: selectedLease.mac,
           routerId: provRouter,
-          profileId: provProfile
+          profileId: provProfile,
+          provider: provProvider || null
        });
        toast.success('Cliente aprovisionado correctamente.');
        setShowProvision(false);
@@ -143,6 +145,14 @@ export function Clients() {
                                </select>
                            </div>
                         </div>
+                        <div className="space-y-2">
+                             <label className="text-xs text-neutral-400 uppercase font-mono tracking-wider">Proveedor WAN (Address-List)</label>
+                             <select value={provProvider} onChange={e => setProvProvider(e.target.value)} className="w-full flex h-10 items-center justify-between rounded-md border border-neutral-800 bg-neutral-950 px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500">
+                                <option value="">Automático</option>
+                                <option value="Inter">Grupo_Inter</option>
+                                <option value="Airtek">Grupo_Airtek</option>
+                             </select>
+                        </div>
                         <button type="submit" className="w-full h-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-[0_0_15px_rgba(79,70,229,0.4)] transition-all">
                            Convertir a IP Fija y Crear Cola
                         </button>
@@ -182,6 +192,7 @@ export function Clients() {
               <tr>
                 <th className="px-4 py-4 font-medium pl-6">Información de Cliente</th>
                 <th className="px-4 py-4 font-medium">IP / DHCP</th>
+                <th className="px-4 py-4 font-medium">Proveedor WAN</th>
                 <th className="px-4 py-4 font-medium">Consumo Total</th>
                 <th className="px-4 py-4 font-medium">Perfil / Plan</th>
                 <th className="px-4 py-4 font-medium">Estado</th>
@@ -215,28 +226,31 @@ export function Clients() {
                     </div>
                   </td>
                   <td className="px-4 py-3 font-mono">
-                    <div className="flex items-center gap-2">
-                       <span className="text-indigo-300 font-bold">{client.ip}</span>
-                       {(() => {
-                           const octet = parseInt(client.ip.split('.')[3] || '0', 10);
-                           let provider = '';
-                           let provColor = '';
-                           if (octet >= 3 && octet <= 130) {
-                               provider = 'Inter';
-                               provColor = 'text-blue-400 bg-blue-900/20 border-blue-900/50';
-                           } else if (octet >= 131 && octet <= 250) {
-                               provider = 'Airtek';
-                               provColor = 'text-purple-400 bg-purple-900/20 border-purple-900/50';
-                           }
-                           
-                           return provider ? (
-                               <Badge variant="outline" className={`text-[9px] uppercase px-1.5 py-0 border ${provColor}`}>
-                                  {provider}
-                               </Badge>
-                           ) : null;
-                       })()}
-                    </div>
+                    <div className="text-indigo-300 font-bold">{client.ip}</div>
                     <div className="text-xs text-neutral-500 mt-1">{client.mac}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <select 
+                       value={client.provider || ''} 
+                       onChange={async (e) => {
+                          const val = e.target.value || null;
+                          try {
+                             await updateClientProvider(client.id, val as any);
+                             toast.success(`Proveedor movido a ${val || 'Automático'}`);
+                          } catch(err) {
+                             toast.error('Error al cambiar proveedor (address-list)');
+                          }
+                       }}
+                       className={`bg-neutral-900 border text-[10px] uppercase font-bold rounded-md px-2 py-1 focus:ring-1 w-[110px] ${
+                          client.provider === 'Inter' ? 'text-blue-400 border-blue-900/50' : 
+                          client.provider === 'Airtek' ? 'text-purple-400 border-purple-900/50' : 
+                          'text-neutral-500 border-neutral-800'
+                       }`}
+                    >
+                       <option value="">Automático</option>
+                       <option value="Inter">INTER</option>
+                       <option value="Airtek">AIRTEK</option>
+                    </select>
                   </td>
                   <td className="px-4 py-3">
                      <div className="flex flex-col">
