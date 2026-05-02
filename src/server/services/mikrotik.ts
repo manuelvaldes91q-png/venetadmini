@@ -337,6 +337,22 @@ export async function setClientProviderOnRouter(routerId: string, ip: string, pr
             await conn.write('/ip/firewall/address-list/add', [ `=list=Grupo_Airtek`, `=address=${ip}` ]);
         }
 
+        // 4. Force traffic to shift immediately by clearing existing connections
+        try {
+            const safeIp = ip.replace(/\./g, '\\.');
+            const connectionsSrc = await conn.write('/ip/firewall/connection/print', [`?~src-address=^${safeIp}:`]);
+            for (const c of connectionsSrc) {
+                if (c['.id']) await conn.write('/ip/firewall/connection/remove', [`=.id=${c['.id']}`]);
+            }
+            // Also clear connections where destination was the client (just in case)
+            const connectionsDst = await conn.write('/ip/firewall/connection/print', [`?~dst-address=^${safeIp}:`]);
+            for (const c of connectionsDst) {
+                if (c['.id']) await conn.write('/ip/firewall/connection/remove', [`=.id=${c['.id']}`]);
+            }
+        } catch(e) {
+            console.error('Failed to clear connections:', e);
+        }
+
         conn.close();
     } catch(err) {
         console.error('MikroTik Update Provider Error:', err);
