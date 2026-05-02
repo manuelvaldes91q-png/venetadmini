@@ -339,8 +339,12 @@ export async function setClientProviderOnRouter(routerId: string, ip: string, pr
 
         // 4. Force traffic to shift immediately by clearing existing connections
         try {
-            const scriptName = `clear_${ip.replace(/\./g, '_')}_${Date.now()}`;
-            const scriptSource = `/ip firewall connection remove [find src-address~"${ip}:" or dst-address~"${ip}:"];`;
+            const scriptName = `clear_conn_${Date.now()}`;
+            const scriptSource = `
+:do { /ip firewall connection remove [find src-address~"${ip}:"] } on-error={}
+:do { /ip firewall connection remove [find dst-address~"${ip}:"] } on-error={}
+:do { /ip route cache flush } on-error={}
+`;
             
             await conn.write('/system/script/add', [
                 `=name=${scriptName}`,
