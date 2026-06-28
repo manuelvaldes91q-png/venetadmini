@@ -2,8 +2,108 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../lib/store';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
-import { Server, Plus, Route, ShieldAlert, Trash2 } from 'lucide-react';
+import { Server, Plus, Route, ShieldAlert, Trash2, Activity, X } from 'lucide-react';
 import { toast } from 'sonner';
+
+function MonitorModal({ routerId, onClose }: { routerId: string, onClose: () => void }) {
+  const { fetchAuthAndData } = useStore();
+  const [data, setData] = useState<{netwatch: any[], routes: any[]} | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAuthAndData(`/api/routers/${routerId}/monitor`)
+      .then(res => res.json())
+      .then(d => {
+        setData(d);
+        setLoading(false);
+      })
+      .catch(err => {
+         toast.error("Error al cargar monitor");
+         setLoading(false);
+      });
+  }, [routerId]);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-neutral-900 border border-white/10 rounded-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl">
+        <div className="p-4 border-b border-white/10 flex items-center justify-between bg-neutral-900/50">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+             <Activity className="w-5 h-5 text-indigo-400" />
+             Monitor de Líneas y Antenas
+          </h2>
+          <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-lg text-neutral-400 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-6 overflow-y-auto space-y-6">
+          {loading ? (
+             <div className="text-center text-neutral-400 py-10">Cargando datos del router...</div>
+          ) : (
+            <>
+              <div>
+                 <h3 className="text-sm uppercase font-bold text-neutral-400 mb-3 tracking-wider">Antenas (Netwatch)</h3>
+                 {data?.netwatch?.length === 0 ? (
+                    <div className="text-neutral-500 text-sm">No hay registros en Netwatch.</div>
+                 ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                       {data?.netwatch?.map((n: any) => (
+                           <div key={n['.id']} className="bg-white/5 border border-white/10 p-3 rounded-xl flex items-center justify-between">
+                              <div>
+                                <div className="text-white font-medium text-sm">{n.host}</div>
+                                <div className="text-xs text-neutral-400">{n.comment || 'Sin nombre'}</div>
+                              </div>
+                              <div className={`px-2 py-1 rounded text-xs font-bold uppercase ${n.status === 'up' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {n.status}
+                              </div>
+                           </div>
+                       ))}
+                    </div>
+                 )}
+              </div>
+
+              <div>
+                 <h3 className="text-sm uppercase font-bold text-neutral-400 mb-3 tracking-wider">Rutas Activas (WAN1 / WAN2)</h3>
+                 <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+                   <table className="w-full text-left text-sm">
+                     <thead className="bg-white/5 border-b border-white/10 text-neutral-400">
+                       <tr>
+                         <th className="p-3 font-medium">Destino</th>
+                         <th className="p-3 font-medium">Gateway</th>
+                         <th className="p-3 font-medium">Distancia</th>
+                         <th className="p-3 font-medium">Status</th>
+                         <th className="p-3 font-medium">Comentario</th>
+                       </tr>
+                     </thead>
+                     <tbody className="divide-y divide-white/5 text-neutral-300">
+                       {data?.routes?.filter((r: any) => r.comment && (r.comment.toUpperCase().includes('WAN') || r.comment.toUpperCase().includes('AIRTEK') || r.comment.toUpperCase().includes('INTER'))).map((r: any) => (
+                          <tr key={r['.id']}>
+                            <td className="p-3 font-mono">{r['dst-address']}</td>
+                            <td className="p-3">{r.gateway}</td>
+                            <td className="p-3">{r.distance}</td>
+                            <td className="p-3">
+                               {r.active === 'true' ? (
+                                  <span className="text-emerald-400 font-medium">Activa</span>
+                               ) : (
+                                  <span className="text-neutral-500">Inactiva</span>
+                               )}
+                            </td>
+                            <td className="p-3 text-neutral-400 text-xs">{r.comment}</td>
+                          </tr>
+                       ))}
+                       {data?.routes?.filter((r: any) => r.comment && (r.comment.toUpperCase().includes('WAN') || r.comment.toUpperCase().includes('AIRTEK') || r.comment.toUpperCase().includes('INTER'))).length === 0 && (
+                          <tr><td colSpan={5} className="p-4 text-center text-neutral-500">No se encontraron rutas etiquetadas como WAN, AIRTEK o INTER</td></tr>
+                       )}
+                     </tbody>
+                   </table>
+                 </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export function Routers() {
   const { routers, fetchRouters, addRouter, deleteRouter, user } = useStore();
@@ -12,6 +112,7 @@ export function Routers() {
   const [port, setPort] = useState('8728');
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
+  const [monitorRouterId, setMonitorRouterId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRouters();
@@ -101,14 +202,20 @@ export function Routers() {
                            </span>
                         </div>
                         {user?.role === 'admin' && (
-                           <button onClick={() => {
-                               if (confirm(`¿Eliminar router ${rt.name}?`)) {
-                                   deleteRouter(rt.id).then(()=>toast.success('Router eliminado')).catch(()=>toast.error('Ocurrió un error'));
-                               }
-                           }} className="text-rose-400 hover:text-rose-300 bg-rose-500/10 px-2 py-1 flex items-center gap-1 rounded text-xs transition-colors">
-                             <Trash2 className="w-3 h-3" />
-                             Quitar Nodo
-                           </button>
+                           <div className="flex flex-col gap-2">
+                             <button onClick={() => setMonitorRouterId(rt.id)} className="text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 px-2 py-1 flex items-center gap-1 rounded text-xs transition-colors w-full justify-center">
+                               <Activity className="w-3 h-3" />
+                               Monitorear
+                             </button>
+                             <button onClick={() => {
+                                 if (confirm(`¿Eliminar router ${rt.name}?`)) {
+                                     deleteRouter(rt.id).then(()=>toast.success('Router eliminado')).catch(()=>toast.error('Ocurrió un error'));
+                                 }
+                             }} className="text-rose-400 hover:text-rose-300 bg-rose-500/10 px-2 py-1 flex items-center gap-1 rounded text-xs transition-colors w-full justify-center">
+                               <Trash2 className="w-3 h-3" />
+                               Quitar Nodo
+                             </button>
+                           </div>
                         )}
                     </div>
                   </div>
@@ -123,6 +230,7 @@ export function Routers() {
             )}
         </div>
       </div>
+      {monitorRouterId && <MonitorModal routerId={monitorRouterId} onClose={() => setMonitorRouterId(null)} />}
     </div>
   );
 }

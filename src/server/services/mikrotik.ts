@@ -427,6 +427,27 @@ export async function getLeasesFromRouters() {
     return allLeases;
 }
 
+export async function getRouterMonitoring(routerId: string) {
+    const db = getDb();
+    const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId) as any;
+    if (!router) throw new Error('Router not found');
+
+    try {
+        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 5 });
+        await conn.connect();
+        
+        const netwatch = await conn.write('/tool/netwatch/print');
+        const routes = await conn.write('/ip/route/print');
+        
+        conn.close();
+        
+        return { netwatch, routes };
+    } catch(err) {
+        console.error('MikroTik Monitor Error:', err);
+        throw err;
+    }
+}
+
 export function startMikrotikSync() {
   console.log('Background MikroTik sync initialized');
   

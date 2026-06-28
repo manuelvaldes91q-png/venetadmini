@@ -6,7 +6,8 @@ import {
     toggleClientOnRouter, 
     deleteClientOnRouter, 
     getLeasesFromRouters,
-    setClientProviderOnRouter
+    setClientProviderOnRouter,
+    getRouterMonitoring
 } from './services/mikrotik.js';
 import crypto from 'crypto';
 
@@ -287,6 +288,15 @@ apiRouter.get('/leases', requireAuth, async (req, res) => {
      res.json(leases);
   } catch(err) {
      res.status(500).json({ error: String(err) });
+  }
+});
+
+apiRouter.get('/routers/:id/monitor', requireAuth, async (req, res) => {
+  try {
+    const data = await getRouterMonitoring(req.params.id);
+    res.json(data);
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
   }
 });
 
