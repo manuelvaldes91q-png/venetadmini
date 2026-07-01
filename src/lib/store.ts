@@ -29,6 +29,7 @@ interface StoreState {
   deleteClient: (id: string) => Promise<void>;
   updateClientProfile: (id: string, profileId: string) => Promise<void>;
   updateClientProvider: (id: string, provider: 'Inter' | 'Airtek' | null) => Promise<void>;
+  updateClientName: (id: string, name: string) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
 }
 
@@ -252,6 +253,21 @@ export const useStore = create<StoreState>((set, get) => {
              method: 'PUT',
              headers: { 'Content-Type': 'application/json' },
              body: JSON.stringify({ provider })
+         });
+         if (res.ok) {
+             get().fetchClients();
+         } else {
+             throw new Error((await res.json()).error || 'Failed');
+         }
+       } catch (e) { throw e; }
+    },
+
+    updateClientName: async (id, name) => {
+       try {
+         const res = await fetchAuthAndData(`/api/clients/${id}/name`, {
+             method: 'PUT',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ name })
          });
          if (res.ok) {
              get().fetchClients();

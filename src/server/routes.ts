@@ -7,7 +7,8 @@ import {
     deleteClientOnRouter, 
     getLeasesFromRouters,
     setClientProviderOnRouter,
-    getRouterMonitoring
+    getRouterMonitoring,
+    updateClientNameOnRouter
 } from './services/mikrotik.js';
 import crypto from 'crypto';
 
@@ -199,6 +200,24 @@ apiRouter.put('/clients/:id/provider', requireAuth, async (req: any, res) => {
     await setClientProviderOnRouter(client.routerId, client.ip, provider);
     
     db.prepare('UPDATE clients SET provider = ? WHERE id = ?').run(provider, id);
+    res.json({ success: true });
+  } catch(err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+apiRouter.put('/clients/:id/name', requireAuth, async (req: any, res) => {
+  if (req.user.role === 'readonly') return res.status(403).json({ error: 'Readonly' });
+  const db = getDb();
+  const { id } = req.params;
+  const { name } = req.body;
+  try {
+    const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(id) as any;
+    if(!client) return res.status(404).json({ error: 'Client not found' });
+    
+    await updateClientNameOnRouter(client.routerId, client.ip, client.mac, name);
+    
+    db.prepare('UPDATE clients SET name = ? WHERE id = ?').run(name, id);
     res.json({ success: true });
   } catch(err) {
     res.status(500).json({ error: String(err) });

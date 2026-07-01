@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useStore } from './lib/store';
 import { Activity, Users, Settings as SettingsIcon, Router, ChevronRight, Zap, ShieldAlert, Cpu, LogOut, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -9,11 +9,13 @@ import { UsersAdmin } from './components/UsersAdmin';
 import { Routers } from './components/Routers';
 import { Settings } from './components/Settings';
 import { Toaster } from './components/ui/sonner';
+import { toast } from 'sonner';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [authInitialized, setAuthInitialized] = useState(false);
-  const { fetchStats, fetchClients, fetchProfiles, fetchRouters, user, token, initAuth, logout } = useStore();
+  const { fetchStats, fetchClients, fetchProfiles, fetchRouters, routers, user, token, initAuth, logout, fetchAuthAndData } = useStore();
+  const prevNetwatchRef = useRef<Record<string, Record<string, string>>>({});
 
   useEffect(() => {
     initAuth().then(() => setAuthInitialized(true));
@@ -30,6 +32,44 @@ export default function App() {
       return () => clearInterval(interval);
     }
   }, [user, token]);
+
+  useEffect(() => {
+    if (!routers || routers.length === 0 || !user || !token) return;
+    
+    const interval = setInterval(() => {
+        routers.forEach(router => {
+            if (router.status !== 'connected') return;
+            fetchAuthAndData(`/api/routers/${router.id}/monitor`)
+                .then(res => {
+                   if (!res.ok) throw new Error();
+                   return res.json();
+                })
+                .then(data => {
+                    if (data && data.netwatch) {
+                        const routerState = prevNetwatchRef.current[router.id] || {};
+                        data.netwatch.forEach((n: any) => {
+                           const host = n.host;
+                           const comment = n.comment || 'Línea';
+                           const status = n.status; // 'up' or 'down'
+
+                           if (routerState[host]) {
+                               if (routerState[host] === 'up' && status === 'down') {
+                                   toast.error(`¡Alerta WAN! ${comment} (${host}) en ${router.name} está DOWN.`);
+                               } else if (routerState[host] === 'down' && status === 'up') {
+                                   toast.success(`¡Restaurada! ${comment} (${host}) en ${router.name} está UP.`);
+                               }
+                           }
+                           routerState[host] = status;
+                        });
+                        prevNetwatchRef.current[router.id] = routerState;
+                    }
+                })
+                .catch(() => {}); // ignore errors silently
+        });
+    }, 15000); // Check every 15s
+
+    return () => clearInterval(interval);
+  }, [routers, user, token, fetchAuthAndData]);
 
   if (!authInitialized) {
       return (

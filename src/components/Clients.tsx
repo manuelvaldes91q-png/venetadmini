@@ -3,12 +3,57 @@ import { useStore } from '../lib/store';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
-import { Search, Plus, Wifi, WifiOff, Power, PowerOff, ShieldCheck, Users, SignalHigh, Trash2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Search, Plus, Wifi, WifiOff, Power, PowerOff, ShieldCheck, Users, SignalHigh, Trash2, ArrowUpRight, ArrowDownRight, Edit2, Check, X } from 'lucide-react';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
 
+function ClientNameEditor({ client }: { client: any }) {
+   const [isEditing, setIsEditing] = useState(false);
+   const [name, setName] = useState(client.name);
+   const { updateClientName } = useStore();
+
+   const handleSave = async () => {
+      if (name.trim() === '') return setIsEditing(false);
+      try {
+         await updateClientName(client.id, name);
+         toast.success('Nombre actualizado');
+         setIsEditing(false);
+      } catch (err) {
+         toast.error('Error al actualizar nombre');
+      }
+   };
+
+   if (isEditing) {
+      return (
+         <div className="flex items-center gap-2">
+            <Input 
+               value={name} 
+               onChange={(e) => setName(e.target.value)}
+               className="h-7 w-40 text-xs bg-neutral-900 border-neutral-700 text-white"
+               autoFocus
+               onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSave();
+                  if (e.key === 'Escape') setIsEditing(false);
+               }}
+            />
+            <button onClick={handleSave} className="text-emerald-400 hover:bg-emerald-400/10 p-1 rounded transition-colors"><Check className="w-3 h-3" /></button>
+            <button onClick={() => setIsEditing(false)} className="text-neutral-400 hover:bg-white/10 p-1 rounded transition-colors"><X className="w-3 h-3" /></button>
+         </div>
+      );
+   }
+
+   return (
+      <div className="font-semibold text-white flex items-center gap-2 group/name cursor-pointer" onClick={() => setIsEditing(true)}>
+         {client.name}
+         <button className="opacity-0 group-hover/name:opacity-100 text-neutral-500 hover:text-white transition-all">
+            <Edit2 className="w-3 h-3" />
+         </button>
+      </div>
+   );
+}
+
 export function Clients() {
-  const { clients, leases, fetchLeases, routers, profiles, addClient, toggleClient, deleteClient, updateClientProfile, updateClientProvider, user } = useStore();
+  const { clients, leases, fetchLeases, routers, profiles, addClient, toggleClient, deleteClient, updateClientProfile, updateClientProvider, updateClientName, user } = useStore();
   const [search, setSearch] = useState('');
   
   const [showProvision, setShowProvision] = useState(false);
@@ -217,7 +262,7 @@ export function Clients() {
                         {client.disabled ? <WifiOff className="w-5 h-5" /> : <Wifi className="w-5 h-5" />}
                       </div>
                       <div>
-                        <div className="font-semibold text-white">{client.name}</div>
+                        <ClientNameEditor client={client} />
                         <div className="text-xs text-neutral-500 flex items-center gap-1 mt-0.5">
                            <ShieldCheck className="w-3 h-3 text-emerald-500" />
                            IP Fija

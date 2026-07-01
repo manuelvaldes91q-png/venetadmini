@@ -266,6 +266,43 @@ export async function toggleClientOnRouter(routerId: string, ip: string, disable
     }
 }
 
+export async function updateClientNameOnRouter(routerId: string, ip: string, mac: string, newName: string) {
+    const db = getDb();
+    const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId) as any;
+    if (!router) return;
+
+    try {
+        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '' });
+        await conn.connect();
+        
+        // 1. Update DHCP lease comment
+        const leases = await conn.write('/ip/dhcp-server/lease/print');
+        const lease = leases.find((l: any) => l['mac-address'] === mac || l.address === ip);
+        if (lease) {
+           await conn.write('/ip/dhcp-server/lease/set', [ `=.id=${lease['.id']}`, `=comment=${newName}` ]);
+        }
+
+        // 2. Update ARP comment
+        const arps = await conn.write('/ip/arp/print');
+        const existingArp = arps.find((a: any) => a['mac-address'] === mac || a.address === ip);
+        if (existingArp) {
+           await conn.write('/ip/arp/set', [ `=.id=${existingArp['.id']}`, `=comment=${newName}` ]);
+        }
+
+        // 3. Update Simple Queue name and comment
+        const queues = await conn.write('/queue/simple/print');
+        const existingQ = queues.find((q: any) => q.target && q.target.startsWith(ip));
+        if (existingQ) {
+            await conn.write('/queue/simple/set', [ `=.id=${existingQ['.id']}`, `=name=${newName}`, `=comment=${newName}` ]);
+        }
+
+        conn.close();
+    } catch(err) {
+        console.error('MikroTik Update Name Error:', err);
+        throw err;
+    }
+}
+
 function ipToLong(ip: string) {
     return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
 }
