@@ -21,6 +21,9 @@ async function startServer() {
 
   // API Routes with rate limiting
   app.use('/api', apiRateLimiter, apiRouter);
+  app.use('/api/*', (req, res) => {
+    res.status(404).json({ error: 'Ruta de API no encontrada.' });
+  });
 
   // Background Services
   startMikrotikSync();
