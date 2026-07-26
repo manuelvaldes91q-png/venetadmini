@@ -315,11 +315,15 @@ export const useStore = create<StoreState>((set, get) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPassword, newPassword })
       });
-      const data = await res.json();
+      let data: any = {};
+      try {
+        const text = await res.text();
+        if (text) data = JSON.parse(text);
+      } catch (e) {}
+
       if (!res.ok) {
         throw new Error(data.error || 'Fallo al cambiar la contraseña.');
       }
-      // Refresh auth profile
       get().initAuth();
     },
 
@@ -329,7 +333,12 @@ export const useStore = create<StoreState>((set, get) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ newPassword })
       });
-      const data = await res.json();
+      let data: any = {};
+      try {
+        const text = await res.text();
+        if (text) data = JSON.parse(text);
+      } catch (e) {}
+
       if (!res.ok) {
         throw new Error(data.error || 'Fallo al cambiar la contraseña del usuario.');
       }

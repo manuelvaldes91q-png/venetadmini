@@ -128,41 +128,49 @@ apiRouter.post('/users', requireAuth, requireAdmin, (req, res) => {
 
 // Change own password
 apiRouter.put('/users/change-password', requireAuth, (req: any, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ error: 'Se requiere la contraseña actual y la nueva contraseña.' });
-  }
-  if (newPassword.length < 4) {
-    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 4 caracteres.' });
-  }
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Se requiere la contraseña actual y la nueva contraseña.' });
+    }
+    if (newPassword.length < 4) {
+      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 4 caracteres.' });
+    }
 
-  const db = getDb();
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id) as any;
-  if (!user || !verifyPassword(currentPassword, user.password)) {
-    return res.status(401).json({ error: 'La contraseña actual es incorrecta.' });
+    const db = getDb();
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id) as any;
+    if (!user || !verifyPassword(currentPassword, user.password)) {
+      return res.status(401).json({ error: 'La contraseña actual es incorrecta.' });
+    }
+
+    const hashedPassword = hashPassword(newPassword);
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, req.user.id);
+
+    res.json({ success: true, message: 'Contraseña actualizada correctamente.' });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err.message || err) });
   }
-
-  const hashedPassword = hashPassword(newPassword);
-  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, req.user.id);
-
-  res.json({ success: true, message: 'Contraseña actualizada correctamente.' });
 });
 
 // Admin reset any user password
 apiRouter.put('/users/:id/password', requireAuth, requireAdmin, (req, res) => {
-  const { newPassword } = req.body;
-  if (!newPassword || newPassword.length < 4) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres.' });
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 4) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres.' });
+    }
+
+    const db = getDb();
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as any;
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+
+    const hashedPassword = hashPassword(newPassword);
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, req.params.id);
+
+    res.json({ success: true, message: `Contraseña de ${user.username} actualizada.` });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err.message || err) });
   }
-
-  const db = getDb();
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as any;
-  if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
-
-  const hashedPassword = hashPassword(newPassword);
-  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, req.params.id);
-
-  res.json({ success: true, message: `Contraseña de ${user.username} actualizada.` });
 });
 
 apiRouter.delete('/users/:id', requireAuth, requireAdmin, (req: any, res) => {
