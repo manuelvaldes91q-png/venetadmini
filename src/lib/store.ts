@@ -336,9 +336,10 @@ export const useStore = create<StoreState>((set, get) => {
     },
 
     changeUserPassword: async (userId, newPassword) => {
+      if (!userId) throw new Error('ID de usuario no especificado.');
       const res = await fetchAuthAndData(`/api/users/${encodeURIComponent(userId)}/password`, {
         method: 'PUT',
-        body: JSON.stringify({ newPassword })
+        body: JSON.stringify({ newPassword, userId })
       });
       const data = await res.json().catch(() => ({}));
 

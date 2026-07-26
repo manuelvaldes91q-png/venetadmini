@@ -154,6 +154,7 @@ const handleChangePassword = (req: any, res: any) => {
 
 apiRouter.put('/users/change-password', requireAuth, handleChangePassword);
 apiRouter.post('/users/change-password', requireAuth, handleChangePassword);
+apiRouter.patch('/users/change-password', requireAuth, handleChangePassword);
 
 // Admin reset any user password
 const handleAdminResetPassword = (req: any, res: any) => {
@@ -163,9 +164,14 @@ const handleAdminResetPassword = (req: any, res: any) => {
       return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres.' });
     }
 
+    const targetIdentifier = req.params.id || req.body?.userId || req.body?.id || req.body?.username;
+    if (!targetIdentifier) {
+      return res.status(400).json({ error: 'Usuario no especificado.' });
+    }
+
     const db = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE id = ? OR username = ?').get(req.params.id, req.params.id) as any;
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    const user = db.prepare('SELECT * FROM users WHERE id = ? OR username = ?').get(targetIdentifier, targetIdentifier) as any;
+    if (!user) return res.status(400).json({ error: `Usuario '${targetIdentifier}' no encontrado.` });
 
     const hashedPassword = hashPassword(newPassword);
     db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, user.id);
@@ -176,8 +182,11 @@ const handleAdminResetPassword = (req: any, res: any) => {
   }
 };
 
+apiRouter.put('/users/password', requireAuth, requireAdmin, handleAdminResetPassword);
+apiRouter.post('/users/password', requireAuth, requireAdmin, handleAdminResetPassword);
 apiRouter.put('/users/:id/password', requireAuth, requireAdmin, handleAdminResetPassword);
 apiRouter.post('/users/:id/password', requireAuth, requireAdmin, handleAdminResetPassword);
+apiRouter.patch('/users/:id/password', requireAuth, requireAdmin, handleAdminResetPassword);
 
 apiRouter.delete('/users/:id', requireAuth, requireAdmin, (req: any, res) => {
   const db = getDb();

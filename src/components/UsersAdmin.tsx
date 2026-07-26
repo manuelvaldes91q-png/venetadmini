@@ -83,7 +83,8 @@ export function UsersAdmin() {
 
     setUserPassLoading(true);
     try {
-      await changeUserPassword(resetModalUser.id, userNewPassword);
+      const targetId = resetModalUser.id || resetModalUser.username;
+      await changeUserPassword(targetId, userNewPassword);
       toast.success(`Contraseña de ${resetModalUser.username} actualizada.`);
       setResetModalUser(null);
       setUserNewPassword('');
