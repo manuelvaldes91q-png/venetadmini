@@ -5,19 +5,22 @@ import { initDb } from './src/server/db.js';
 import { apiRouter } from './src/server/routes.js';
 import { startMikrotikSync } from './src/server/services/mikrotik.js';
 import { setupTelegramBot } from './src/server/services/telegram.js';
+import { securityHeadersMiddleware, apiRateLimiter } from './src/server/security.js';
 
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
+  app.disable('x-powered-by');
+  app.use(securityHeadersMiddleware);
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '100kb' }));
 
   // Initialize DB
   await initDb();
 
-  // API Routes
-  app.use('/api', apiRouter);
+  // API Routes with rate limiting
+  app.use('/api', apiRateLimiter, apiRouter);
 
   // Background Services
   startMikrotikSync();

@@ -485,6 +485,18 @@ export async function getRouterMonitoring(routerId: string) {
     }
 }
 
+export async function testRouterConnection(host: string, port: number, user: string, password: string) {
+    try {
+        const conn = new RouterOSAPI({ host, port: port || 8728, user, password: password || '', timeout: 5 });
+        await conn.connect();
+        await conn.write('/system/identity/print');
+        conn.close();
+        return true;
+    } catch(err: any) {
+        throw new Error(`Conexión fallida: ${err.message || String(err)}`);
+    }
+}
+
 export function startMikrotikSync() {
   console.log('Background MikroTik sync initialized');
   

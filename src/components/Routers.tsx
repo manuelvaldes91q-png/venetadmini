@@ -106,27 +106,65 @@ function MonitorModal({ routerId, onClose }: { routerId: string, onClose: () => 
 }
 
 export function Routers() {
-  const { routers, fetchRouters, addRouter, deleteRouter, user } = useStore();
+  const { routers, fetchRouters, addRouter, updateRouter, testRouterConnection, deleteRouter, user } = useStore();
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [host, setHost] = useState('');
   const [port, setPort] = useState('8728');
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [monitorRouterId, setMonitorRouterId] = useState<string | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
 
   useEffect(() => {
     fetchRouters();
   }, []);
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const handleTest = async (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsTesting(true);
+      try {
+          await testRouterConnection({ host, port: parseInt(port) || 8728, username, password });
+          toast.success('¡Conexión Exitosa!');
+      } catch(err: any) {
+          toast.error(err.message || 'Error de conexión');
+      } finally {
+          setIsTesting(false);
+      }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await addRouter({ name, host, port: parseInt(port) || 8728, username, password });
-      toast.success('MikroTik added to cluster.');
-      setName(''); setHost(''); setPassword('');
+      if (editingId) {
+          await updateRouter(editingId, { name, host, port: parseInt(port) || 8728, username, password });
+          toast.success('Router actualizado');
+      } else {
+          await addRouter({ name, host, port: parseInt(port) || 8728, username, password });
+          toast.success('Router añadido.');
+      }
+      handleCancelEdit();
     } catch(err: any) {
-      toast.error(err.message || 'Failed to add Router');
+      toast.error(err.message || 'Error al guardar router');
     }
+  };
+
+  const handleEdit = (rt: any) => {
+      setEditingId(rt.id);
+      setName(rt.name);
+      setHost(rt.host);
+      setPort(String(rt.port));
+      setUsername(rt.username);
+      setPassword(''); // Password usually hidden, require re-entry or handled in backend
+  };
+
+  const handleCancelEdit = () => {
+      setEditingId(null);
+      setName('');
+      setHost('');
+      setPort('8728');
+      setUsername('admin');
+      setPassword('');
   };
 
   return (
@@ -142,11 +180,18 @@ export function Routers() {
         
         {user?.role === 'admin' && (
           <Card className="glass border-white/5 bg-white/5 p-6 h-fit">
-            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-indigo-400" />
-                Añadir Nodo MikroTik
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-indigo-400" />
+                    {editingId ? 'Editar Nodo MikroTik' : 'Añadir Nodo MikroTik'}
+                </div>
+                {editingId && (
+                   <button onClick={handleCancelEdit} className="text-xs text-neutral-400 hover:text-white flex items-center gap-1">
+                      <X className="w-3 h-3" /> Cancelar
+                   </button>
+                )}
             </h3>
-            <form onSubmit={handleAdd} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                     <label className="text-xs text-neutral-400 uppercase font-mono tracking-wider">Nombre del Router</label>
                     <Input value={name} onChange={e => setName(e.target.value)} required placeholder="ej. Nodo Central Fibra" className="bg-neutral-900/50 border-neutral-800 text-white" />
@@ -166,12 +211,19 @@ export function Routers() {
                     <Input value={username} onChange={e => setUsername(e.target.value)} required className="bg-neutral-900/50 border-neutral-800 text-white" />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-xs text-neutral-400 uppercase font-mono tracking-wider">Contraseña API</label>
-                    <Input type="password" value={password} onChange={e => setPassword(e.target.value)} className="bg-neutral-900/50 border-neutral-800 text-white" />
+                    <label className="text-xs text-neutral-400 uppercase font-mono tracking-wider">Contraseña API {editingId && '(Dejar en blanco para no cambiar)'}</label>
+                    <Input type="password" value={password} onChange={e => setPassword(e.target.value)} className="bg-neutral-900/50 border-neutral-800 text-white" required={!editingId} />
                 </div>
-                <button type="submit" className="w-full h-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-[0_0_15px_rgba(79,70,229,0.4)] transition-colors mt-4">
-                    Conectar Router
-                </button>
+                
+                <div className="flex items-center gap-3 mt-4">
+                   <button type="button" onClick={handleTest} disabled={isTesting || !host || !username} className="w-1/2 h-10 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-white rounded-lg font-medium transition-colors border border-white/10 flex items-center justify-center gap-2">
+                       {isTesting ? <Activity className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                       Probar
+                   </button>
+                   <button type="submit" className="w-1/2 h-10 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium shadow-[0_0_15px_rgba(79,70,229,0.4)] transition-colors">
+                       {editingId ? 'Guardar Cambios' : 'Conectar Router'}
+                   </button>
+                </div>
             </form>
           </Card>
         )}
@@ -203,10 +255,15 @@ export function Routers() {
                         </div>
                         {user?.role === 'admin' && (
                            <div className="flex flex-col gap-2">
-                             <button onClick={() => setMonitorRouterId(rt.id)} className="text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 px-2 py-1 flex items-center gap-1 rounded text-xs transition-colors w-full justify-center">
-                               <Activity className="w-3 h-3" />
-                               Monitorear
-                             </button>
+                             <div className="flex gap-2 w-full">
+                               <button onClick={() => setMonitorRouterId(rt.id)} className="text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 px-2 py-1 flex items-center gap-1 rounded text-xs transition-colors flex-1 justify-center">
+                                 <Activity className="w-3 h-3" />
+                                 Monitor
+                               </button>
+                               <button onClick={() => handleEdit(rt)} className="text-amber-400 hover:text-amber-300 bg-amber-500/10 px-2 py-1 flex items-center gap-1 rounded text-xs transition-colors flex-1 justify-center">
+                                 Editar
+                               </button>
+                             </div>
                              <button onClick={() => {
                                  if (confirm(`¿Eliminar router ${rt.name}?`)) {
                                      deleteRouter(rt.id).then(()=>toast.success('Router eliminado')).catch(()=>toast.error('Ocurrió un error'));

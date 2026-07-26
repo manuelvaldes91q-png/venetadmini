@@ -23,6 +23,8 @@ interface StoreState {
   fetchSettings: () => Promise<void>;
   saveSettings: (settings: Record<string, string>) => Promise<void>;
   addRouter: (router: any) => Promise<void>;
+  updateRouter: (id: string, router: any) => Promise<void>;
+  testRouterConnection: (router: any) => Promise<void>;
   deleteRouter: (id: string) => Promise<void>;
   addClient: (client: any) => Promise<void>;
   toggleClient: (id: string) => Promise<void>;
@@ -31,6 +33,8 @@ interface StoreState {
   updateClientProvider: (id: string, provider: 'Inter' | 'Airtek' | null) => Promise<void>;
   updateClientName: (id: string, name: string) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
+  changeMyPassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  changeUserPassword: (userId: string, newPassword: string) => Promise<void>;
 }
 
 export const useStore = create<StoreState>((set, get) => {
@@ -165,6 +169,34 @@ export const useStore = create<StoreState>((set, get) => {
       } catch(e) { throw e; }
     },
 
+    updateRouter: async (id, routerData) => {
+      try {
+        const res = await fetchAuthAndData(`/api/routers/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(routerData)
+        });
+        if (res.ok) {
+          get().fetchRouters();
+        } else {
+          throw new Error((await res.json()).error);
+        }
+      } catch(e) { throw e; }
+    },
+
+    testRouterConnection: async (routerData) => {
+      try {
+        const res = await fetchAuthAndData('/api/routers/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(routerData)
+        });
+        if (!res.ok) {
+          throw new Error((await res.json()).error);
+        }
+      } catch(e) { throw e; }
+    },
+
     deleteRouter: async (id) => {
       try {
         const res = await fetchAuthAndData(`/api/routers/${id}`, { method: 'DELETE' });
@@ -275,6 +307,33 @@ export const useStore = create<StoreState>((set, get) => {
              throw new Error((await res.json()).error || 'Failed');
          }
        } catch (e) { throw e; }
+    },
+
+    changeMyPassword: async (currentPassword, newPassword) => {
+      const res = await fetchAuthAndData('/api/users/change-password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Fallo al cambiar la contraseña.');
+      }
+      // Refresh auth profile
+      get().initAuth();
+    },
+
+    changeUserPassword: async (userId, newPassword) => {
+      const res = await fetchAuthAndData(`/api/users/${userId}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Fallo al cambiar la contraseña del usuario.');
+      }
+      get().fetchUsers();
     }
   };
 });

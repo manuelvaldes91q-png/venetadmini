@@ -11,6 +11,13 @@ import {
     updateClientNameOnRouter
 } from './services/mikrotik.js';
 import crypto from 'crypto';
+import { 
+    hashPassword, 
+    verifyPassword, 
+    loginRateLimiter, 
+    recordFailedLogin, 
+    resetFailedLogin 
+} from './security.js';
 
 export const apiRouter = Router();
 
@@ -40,21 +47,60 @@ apiRouter.get('/health', (req, res) => {
 });
 
 // AUTH
-apiRouter.post('/auth/login', (req, res) => {
+apiRouter.post('/auth/login', loginRateLimiter, (req, res) => {
   const { username, password } = req.body;
+  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1');
   const db = getDb();
-  const user = db.prepare('SELECT * FROM users WHERE username = ? AND password = ?').get(username, password) as any;
-  if (!user) return res.status(401).json({ error: 'Invalid credentials' });
   
+  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as any;
+  if (!user || !verifyPassword(password, user.password)) {
+    recordFailedLogin(ip);
+    return res.status(401).json({ error: 'Credenciales inválidas' });
+  }
+  
+  resetFailedLogin(ip);
+
+  // If password was stored as plaintext, upgrade it to pbkdf2 automatically!
+  if (!user.password.startsWith('pbkdf2:')) {
+    const hashed = hashPassword(password);
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashed, user.id);
+  }
+
   const sessionId = crypto.randomUUID();
   const expires = Date.now() + 1000 * 60 * 60 * 24; // 24 hours
   db.prepare('INSERT INTO sessions (id, userId, expires) VALUES (?, ?, ?)').run(sessionId, user.id, expires);
   
-  res.json({ token: sessionId, user: { id: user.id, username: user.username, role: user.role } });
+  res.json({ 
+    token: sessionId, 
+    user: { 
+      id: user.id, 
+      username: user.username, 
+      role: user.role,
+      isDefaultPassword: password === 'admin123'
+    } 
+  });
+});
+
+apiRouter.post('/auth/logout', requireAuth, (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (token) {
+    const db = getDb();
+    db.prepare('DELETE FROM sessions WHERE id = ?').run(token);
+  }
+  res.json({ success: true });
 });
 
 apiRouter.get('/auth/me', requireAuth, (req: any, res) => {
-  res.json({ user: req.user });
+  const db = getDb();
+  const user = db.prepare('SELECT id, username, password, role FROM users WHERE id = ?').get(req.user.id) as any;
+  res.json({ 
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      isDefaultPassword: verifyPassword('admin123', user.password)
+    } 
+  });
 });
 
 // USERS
@@ -66,14 +112,57 @@ apiRouter.get('/users', requireAuth, requireAdmin, (req, res) => {
 
 apiRouter.post('/users', requireAuth, requireAdmin, (req, res) => {
   const { username, password, role } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
+  if (password.length < 4) return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres' });
+
   const db = getDb();
   try {
     const id = crypto.randomUUID();
-    db.prepare('INSERT INTO users (id, username, password, role) VALUES (?, ?, ?, ?)').run(id, username, password, role);
-    res.json({ id, username, role });
+    const hashedPassword = hashPassword(password);
+    db.prepare('INSERT INTO users (id, username, password, role) VALUES (?, ?, ?, ?)').run(id, username, hashedPassword, role || 'tech');
+    res.json({ id, username, role: role || 'tech' });
   } catch(err) {
     res.status(500).json({ error: String(err) });
   }
+});
+
+// Change own password
+apiRouter.put('/users/change-password', requireAuth, (req: any, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Se requiere la contraseña actual y la nueva contraseña.' });
+  }
+  if (newPassword.length < 4) {
+    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 4 caracteres.' });
+  }
+
+  const db = getDb();
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id) as any;
+  if (!user || !verifyPassword(currentPassword, user.password)) {
+    return res.status(401).json({ error: 'La contraseña actual es incorrecta.' });
+  }
+
+  const hashedPassword = hashPassword(newPassword);
+  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, req.user.id);
+
+  res.json({ success: true, message: 'Contraseña actualizada correctamente.' });
+});
+
+// Admin reset any user password
+apiRouter.put('/users/:id/password', requireAuth, requireAdmin, (req, res) => {
+  const { newPassword } = req.body;
+  if (!newPassword || newPassword.length < 4) {
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 4 caracteres.' });
+  }
+
+  const db = getDb();
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as any;
+  if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+
+  const hashedPassword = hashPassword(newPassword);
+  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, req.params.id);
+
+  res.json({ success: true, message: `Contraseña de ${user.username} actualizada.` });
 });
 
 apiRouter.delete('/users/:id', requireAuth, requireAdmin, (req: any, res) => {
@@ -81,6 +170,7 @@ apiRouter.delete('/users/:id', requireAuth, requireAdmin, (req: any, res) => {
   const db = getDb();
   try {
     db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+    db.prepare('DELETE FROM sessions WHERE userId = ?').run(req.params.id);
     res.json({ success: true });
   } catch(err) {
     res.status(500).json({ error: String(err) });
@@ -107,6 +197,33 @@ apiRouter.post('/routers', requireAuth, requireAdmin, (req, res) => {
     syncRouter(id).catch(console.error);
     
     res.json({ id, status: 'success' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+apiRouter.put('/routers/:id', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const { name, host, port, username, password } = req.body;
+  try {
+    db.prepare('UPDATE routers SET name = ?, host = ?, port = ?, username = ?, password = ?, status = ? WHERE id = ?')
+      .run(name, host, port || 8728, username, password, 'disconnected', req.params.id);
+    
+    // Trigger sync
+    syncRouter(req.params.id).catch(console.error);
+    
+    res.json({ id: req.params.id, status: 'success' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+apiRouter.post('/routers/test', requireAuth, requireAdmin, async (req, res) => {
+  const { host, port, username, password } = req.body;
+  try {
+    const { testRouterConnection } = await import('./services/mikrotik.js');
+    await testRouterConnection(host, port, username, password);
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
