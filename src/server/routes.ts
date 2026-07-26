@@ -127,7 +127,7 @@ apiRouter.post('/users', requireAuth, requireAdmin, (req, res) => {
 });
 
 // Change own password
-apiRouter.put('/users/change-password', requireAuth, (req: any, res) => {
+const handleChangePassword = (req: any, res: any) => {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) {
@@ -140,7 +140,7 @@ apiRouter.put('/users/change-password', requireAuth, (req: any, res) => {
     const db = getDb();
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id) as any;
     if (!user || !verifyPassword(currentPassword, user.password)) {
-      return res.status(401).json({ error: 'La contraseña actual es incorrecta.' });
+      return res.status(400).json({ error: 'La contraseña actual es incorrecta.' });
     }
 
     const hashedPassword = hashPassword(newPassword);
@@ -150,10 +150,13 @@ apiRouter.put('/users/change-password', requireAuth, (req: any, res) => {
   } catch (err: any) {
     res.status(500).json({ error: String(err.message || err) });
   }
-});
+};
+
+apiRouter.put('/users/change-password', requireAuth, handleChangePassword);
+apiRouter.post('/users/change-password', requireAuth, handleChangePassword);
 
 // Admin reset any user password
-apiRouter.put('/users/:id/password', requireAuth, requireAdmin, (req, res) => {
+const handleAdminResetPassword = (req: any, res: any) => {
   try {
     const { newPassword } = req.body;
     if (!newPassword || newPassword.length < 4) {
@@ -171,7 +174,10 @@ apiRouter.put('/users/:id/password', requireAuth, requireAdmin, (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: String(err.message || err) });
   }
-});
+};
+
+apiRouter.put('/users/:id/password', requireAuth, requireAdmin, handleAdminResetPassword);
+apiRouter.post('/users/:id/password', requireAuth, requireAdmin, handleAdminResetPassword);
 
 apiRouter.delete('/users/:id', requireAuth, requireAdmin, (req: any, res) => {
   if (req.params.id === req.user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
