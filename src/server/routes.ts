@@ -164,11 +164,11 @@ const handleAdminResetPassword = (req: any, res: any) => {
     }
 
     const db = getDb();
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as any;
+    const user = db.prepare('SELECT * FROM users WHERE id = ? OR username = ?').get(req.params.id, req.params.id) as any;
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
 
     const hashedPassword = hashPassword(newPassword);
-    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, req.params.id);
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, user.id);
 
     res.json({ success: true, message: `Contraseña de ${user.username} actualizada.` });
   } catch (err: any) {
@@ -180,11 +180,14 @@ apiRouter.put('/users/:id/password', requireAuth, requireAdmin, handleAdminReset
 apiRouter.post('/users/:id/password', requireAuth, requireAdmin, handleAdminResetPassword);
 
 apiRouter.delete('/users/:id', requireAuth, requireAdmin, (req: any, res) => {
-  if (req.params.id === req.user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
   const db = getDb();
   try {
-    db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
-    db.prepare('DELETE FROM sessions WHERE userId = ?').run(req.params.id);
+    const user = db.prepare('SELECT * FROM users WHERE id = ? OR username = ?').get(req.params.id, req.params.id) as any;
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    if (user.id === req.user.id) return res.status(400).json({ error: 'No puedes eliminarte a ti mismo.' });
+
+    db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+    db.prepare('DELETE FROM sessions WHERE userId = ?').run(user.id);
     res.json({ success: true });
   } catch(err) {
     res.status(500).json({ error: String(err) });

@@ -336,7 +336,7 @@ export const useStore = create<StoreState>((set, get) => {
     },
 
     changeUserPassword: async (userId, newPassword) => {
-      const res = await fetchAuthAndData(`/api/users/${userId}/password`, {
+      const res = await fetchAuthAndData(`/api/users/${encodeURIComponent(userId)}/password`, {
         method: 'PUT',
         body: JSON.stringify({ newPassword })
       });
