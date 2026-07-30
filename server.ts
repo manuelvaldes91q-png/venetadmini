@@ -8,6 +8,14 @@ import { startMikrotikSync } from './src/server/services/mikrotik.js';
 import { setupTelegramBot } from './src/server/services/telegram.js';
 import { securityHeadersMiddleware, apiRateLimiter } from './src/server/security.js';
 
+process.on('uncaughtException', (err) => {
+  console.error('[SERVER] Uncaught Exception caught safely:', err?.message || err);
+});
+
+process.on('unhandledRejection', (reason: any) => {
+  console.error('[SERVER] Unhandled Rejection caught safely:', reason?.message || reason);
+});
+
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;

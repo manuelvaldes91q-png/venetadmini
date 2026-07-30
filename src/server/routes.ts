@@ -295,6 +295,7 @@ apiRouter.post('/clients', requireAuth, async (req: any, res) => {
     db.prepare('INSERT INTO clients (id, routerId, name, ip, mac, status, profileId, provider, disabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(id, routerId, name, ip, mac, 'active', profileId, provider, 0);
 
+    backupDbToFile();
     res.json({ id, status: 'success' });
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -317,6 +318,7 @@ apiRouter.post('/clients/:id/toggle', requireAuth, async (req: any, res) => {
     db.prepare('UPDATE clients SET disabled = ?, status = ? WHERE id = ?')
       .run(newDisabled, newStatus, id);
     
+    backupDbToFile();
     res.json({ success: true, newStatus });
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -336,6 +338,7 @@ apiRouter.put('/clients/:id/profile', requireAuth, async (req: any, res) => {
         await provisionClientToRouter(client.routerId, client.name, client.ip, client.mac, limit);
     }
     db.prepare('UPDATE clients SET profileId = ? WHERE id = ?').run(profileId, id);
+    backupDbToFile();
     res.json({ success: true });
   } catch(err) {
     res.status(500).json({ error: String(err) });
@@ -354,6 +357,7 @@ apiRouter.put('/clients/:id/provider', requireAuth, async (req: any, res) => {
     await setClientProviderOnRouter(client.routerId, client.ip, provider);
     
     db.prepare('UPDATE clients SET provider = ? WHERE id = ?').run(provider, id);
+    backupDbToFile();
     res.json({ success: true });
   } catch(err) {
     res.status(500).json({ error: String(err) });
@@ -372,6 +376,7 @@ apiRouter.put('/clients/:id/name', requireAuth, async (req: any, res) => {
     await updateClientNameOnRouter(client.routerId, client.ip, client.mac, name);
     
     db.prepare('UPDATE clients SET name = ? WHERE id = ?').run(name, id);
+    backupDbToFile();
     res.json({ success: true });
   } catch(err) {
     res.status(500).json({ error: String(err) });
@@ -388,6 +393,7 @@ apiRouter.delete('/clients/:id', requireAuth, async (req: any, res) => {
         await deleteClientOnRouter(client.routerId, client.ip, client.mac);
     }
     db.prepare('DELETE FROM clients WHERE id = ?').run(id);
+    backupDbToFile();
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -408,6 +414,7 @@ apiRouter.post('/profiles', requireAuth, requireAdmin, (req, res) => {
   try {
     db.prepare('INSERT INTO profiles (id, name, rxLimit, txLimit) VALUES (?, ?, ?, ?)')
       .run(id, name, rxLimit, txLimit);
+    backupDbToFile();
     res.json({ id, status: 'success' });
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -448,6 +455,7 @@ apiRouter.post('/settings', requireAuth, requireAdmin, (req, res) => {
         if (value !== undefined && value !== null) stmt.run(key, String(value));
       }
     })();
+    backupDbToFile();
     res.json({ success: true });
   } catch(err) {
     res.status(500).json({ error: String(err) });

@@ -4,13 +4,21 @@ import crypto from 'crypto';
 
 let syncInterval: NodeJS.Timeout | null = null;
 
+function createApiConnection(options: any) {
+    const conn = new RouterOSAPI(options);
+    conn.on('error', (err: any) => {
+        // Prevent unhandled socket 'error' events from crashing Node process
+    });
+    return conn;
+}
+
 export async function syncRouter(routerId: string) {
     const db = getDb();
     const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId) as any;
     if (!router) return;
 
     try {
-        const conn = new RouterOSAPI({ 
+        const conn = createApiConnection({ 
             host: router.host, 
             port: router.port || 8728, 
             user: router.username, 
@@ -198,7 +206,7 @@ export async function provisionClientToRouter(routerId: string, clientName: stri
     if (!router) return;
 
     try {
-        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '' });
+        const conn = createApiConnection({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '' });
         await conn.connect();
         
         // 1. Make DHCP lease static if dynamic
@@ -242,7 +250,7 @@ export async function toggleClientOnRouter(routerId: string, ip: string, disable
     if (!router) return;
 
     try {
-        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 3 });
+        const conn = createApiConnection({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 3 });
         await conn.connect();
         
         const queues = await conn.write('/queue/simple/print');
@@ -272,7 +280,7 @@ export async function updateClientNameOnRouter(routerId: string, ip: string, mac
     if (!router) return;
 
     try {
-        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '' });
+        const conn = createApiConnection({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '' });
         await conn.connect();
         
         // 1. Update DHCP lease comment
@@ -316,7 +324,7 @@ export async function setClientProviderOnRouter(routerId: string, ip: string, pr
     if (!router) return;
 
     try {
-        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '' });
+        const conn = createApiConnection({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '' });
         await conn.connect();
         
         // 1. Fetch current lists
@@ -411,7 +419,7 @@ export async function deleteClientOnRouter(routerId: string, ip: string, mac: st
     if (!router) return;
 
     try {
-        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '' });
+        const conn = createApiConnection({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '' });
         await conn.connect();
         
         const queues = await conn.write('/queue/simple/print');
@@ -439,7 +447,7 @@ export async function getLeasesFromRouters() {
 
     for (const router of routers) {
         try {
-            const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 3 });
+            const conn = createApiConnection({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 3 });
             await conn.connect();
             const leases = await conn.write('/ip/dhcp-server/lease/print');
             conn.close();
@@ -470,15 +478,28 @@ export async function pingHostOnRouter(routerId: string, host: string, count: nu
     if (!router) throw new Error('Router no encontrado');
 
     try {
-        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 6 });
+        const conn = createApiConnection({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 6 });
         await conn.connect();
 
-        const replies = await conn.write('/tool/ping', [
-            `=address=${host}`,
-            `=count=${count}`
-        ]);
+        let replies: any[] = [];
+        try {
+            replies = await conn.write('/ping', [
+                `=address=${host}`,
+                `=count=${count}`
+            ]);
+        } catch(e1) {
+            try {
+                replies = await conn.write('/tool/ping', [
+                    `=address=${host}`,
+                    `=count=${count}`
+                ]);
+            } catch(e2) {
+                try { conn.close(); } catch(e) {}
+                throw new Error(`Ping no soportado en este MikroTik`);
+            }
+        }
 
-        conn.close();
+        try { conn.close(); } catch(e) {}
 
         let totalSent = 0;
         let totalReceived = 0;
@@ -554,13 +575,13 @@ export async function pingHostOnRouter(routerId: string, host: string, count: nu
 
 export async function getAllNetwatchHosts() {
     const db = getDb();
-    const routers = db.prepare('SELECT id, name, host, status FROM routers').all() as any[];
+    const routers = db.prepare('SELECT id, name, host, port, username, password, status FROM routers').all() as any[];
     const allNetwatch: any[] = [];
 
     for (const router of routers) {
-        if (router.status !== 'connected') continue;
+        if (!router.host || !router.username) continue;
         try {
-            const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 4 });
+            const conn = createApiConnection({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 5 });
             await conn.connect();
             const netwatch = await conn.write('/tool/netwatch/print');
             conn.close();
@@ -593,7 +614,7 @@ export async function addNetwatchHostToRouter(routerId: string, host: string, co
     const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId) as any;
     if (!router) throw new Error('Router no encontrado');
 
-    const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 5 });
+    const conn = createApiConnection({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 5 });
     await conn.connect();
 
     await conn.write('/tool/netwatch/add', [
@@ -610,7 +631,7 @@ export async function deleteNetwatchHostFromRouter(routerId: string, mikrotikId:
     const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId) as any;
     if (!router) throw new Error('Router no encontrado');
 
-    const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 5 });
+    const conn = createApiConnection({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 5 });
     await conn.connect();
 
     await conn.write('/tool/netwatch/remove', [
@@ -626,7 +647,7 @@ export async function getRouterMonitoring(routerId: string) {
     if (!router) throw new Error('Router not found');
 
     try {
-        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 5 });
+        const conn = createApiConnection({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 5 });
         await conn.connect();
         
         const netwatch = await conn.write('/tool/netwatch/print');
@@ -643,7 +664,7 @@ export async function getRouterMonitoring(routerId: string) {
 
 export async function testRouterConnection(host: string, port: number, user: string, password: string) {
     try {
-        const conn = new RouterOSAPI({ host, port: port || 8728, user, password: password || '', timeout: 5 });
+        const conn = createApiConnection({ host, port: port || 8728, user, password: password || '', timeout: 5 });
         await conn.connect();
         await conn.write('/system/identity/print');
         conn.close();
