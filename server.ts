@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import cors from 'cors';
 import { initDb } from './src/server/db.js';
@@ -37,10 +38,10 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = new URL('./dist', import.meta.url).pathname;
+    const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(distPath + '/index.html');
+      res.sendFile(path.join(distPath, 'index.html'));
     });
   }
 
