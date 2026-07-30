@@ -464,6 +464,162 @@ export async function getLeasesFromRouters() {
     return allLeases;
 }
 
+export async function pingHostOnRouter(routerId: string, host: string, count: number = 3) {
+    const db = getDb();
+    const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId) as any;
+    if (!router) throw new Error('Router no encontrado');
+
+    try {
+        const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 6 });
+        await conn.connect();
+
+        const replies = await conn.write('/tool/ping', [
+            `=address=${host}`,
+            `=count=${count}`
+        ]);
+
+        conn.close();
+
+        let totalSent = 0;
+        let totalReceived = 0;
+        let rtts: number[] = [];
+
+        for (const rep of replies) {
+            if (rep.sent) totalSent = Math.max(totalSent, parseInt(rep.sent, 10) || 0);
+            if (rep.received) totalReceived = Math.max(totalReceived, parseInt(rep.received, 10) || 0);
+
+            // Parse time or avg-rtt
+            const rawTime = rep['avg-rtt'] || rep.time || rep['min-rtt'];
+            if (rawTime) {
+                let ms = 0;
+                if (typeof rawTime === 'string') {
+                    if (rawTime.includes('ms')) {
+                        ms = parseFloat(rawTime.replace('ms', ''));
+                    } else if (rawTime.includes(':')) {
+                        // format 00:00:00.012 -> 12ms
+                        const parts = rawTime.split(':');
+                        const seconds = parseFloat(parts[parts.length - 1] || '0');
+                        ms = Math.round(seconds * 1000);
+                    } else {
+                        ms = parseFloat(rawTime) || 0;
+                    }
+                } else if (typeof rawTime === 'number') {
+                    ms = rawTime;
+                }
+                if (!isNaN(ms) && ms >= 0 && rep.status !== 'timeout') {
+                    rtts.push(ms);
+                    if (totalReceived === 0) totalReceived++;
+                }
+            }
+        }
+
+        if (totalSent === 0) totalSent = count;
+        const packetLoss = totalSent > 0 ? Math.round(((totalSent - totalReceived) / totalSent) * 100) : 100;
+        const avgRtt = rtts.length > 0 ? Math.round(rtts.reduce((a, b) => a + b, 0) / rtts.length) : null;
+        const minRtt = rtts.length > 0 ? Math.min(...rtts) : null;
+        const maxRtt = rtts.length > 0 ? Math.max(...rtts) : null;
+        const status = packetLoss < 100 ? 'up' : 'down';
+
+        return {
+            host,
+            routerId: router.id,
+            routerName: router.name,
+            sent: totalSent,
+            received: totalReceived,
+            packetLoss,
+            avgRtt,
+            minRtt,
+            maxRtt,
+            status,
+            timestamp: Date.now()
+        };
+    } catch (err: any) {
+        console.error(`Ping error for host ${host} on router ${router.name}:`, err.message || err);
+        return {
+            host,
+            routerId: router.id,
+            routerName: router.name,
+            sent: count,
+            received: 0,
+            packetLoss: 100,
+            avgRtt: null,
+            minRtt: null,
+            maxRtt: null,
+            status: 'down',
+            error: err.message || 'Error de conexión',
+            timestamp: Date.now()
+        };
+    }
+}
+
+export async function getAllNetwatchHosts() {
+    const db = getDb();
+    const routers = db.prepare('SELECT id, name, host, status FROM routers').all() as any[];
+    const allNetwatch: any[] = [];
+
+    for (const router of routers) {
+        if (router.status !== 'connected') continue;
+        try {
+            const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 4 });
+            await conn.connect();
+            const netwatch = await conn.write('/tool/netwatch/print');
+            conn.close();
+
+            for (const item of netwatch) {
+                allNetwatch.push({
+                    id: `${router.id}-${item['.id'] || item.host}`,
+                    mikrotikId: item['.id'],
+                    routerId: router.id,
+                    routerName: router.name,
+                    host: item.host,
+                    comment: item.comment || 'Sin etiqueta',
+                    status: (item.status || 'unknown').toLowerCase(),
+                    since: item.since || '',
+                    interval: item.interval || '00:00:10',
+                    timeout: item.timeout || '00:00:01',
+                    type: item.type || 'icmp'
+                });
+            }
+        } catch (err) {
+            console.error(`Error fetching Netwatch from ${router.name}:`, err);
+        }
+    }
+
+    return allNetwatch;
+}
+
+export async function addNetwatchHostToRouter(routerId: string, host: string, comment: string, interval: string = '00:00:10') {
+    const db = getDb();
+    const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId) as any;
+    if (!router) throw new Error('Router no encontrado');
+
+    const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 5 });
+    await conn.connect();
+
+    await conn.write('/tool/netwatch/add', [
+        `=host=${host}`,
+        `=comment=${comment || 'Antena / Host'}`,
+        `=interval=${interval}`
+    ]);
+
+    conn.close();
+}
+
+export async function deleteNetwatchHostFromRouter(routerId: string, mikrotikId: string) {
+    const db = getDb();
+    const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId) as any;
+    if (!router) throw new Error('Router no encontrado');
+
+    const conn = new RouterOSAPI({ host: router.host, port: router.port || 8728, user: router.username, password: router.password || '', timeout: 5 });
+    await conn.connect();
+
+    await conn.write('/tool/netwatch/remove', [
+        `=.id=${mikrotikId}`
+    ]);
+
+    conn.close();
+}
+
 export async function getRouterMonitoring(routerId: string) {
     const db = getDb();
     const router = db.prepare('SELECT * FROM routers WHERE id = ?').get(routerId) as any;

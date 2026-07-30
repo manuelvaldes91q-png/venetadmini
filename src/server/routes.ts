@@ -8,7 +8,11 @@ import {
     getLeasesFromRouters,
     setClientProviderOnRouter,
     getRouterMonitoring,
-    updateClientNameOnRouter
+    updateClientNameOnRouter,
+    pingHostOnRouter,
+    getAllNetwatchHosts,
+    addNetwatchHostToRouter,
+    deleteNetwatchHostFromRouter
 } from './services/mikrotik.js';
 import crypto from 'crypto';
 import { 
@@ -472,3 +476,64 @@ apiRouter.delete('/routers/:id', requireAuth, requireAdmin, (req, res) => {
     res.status(500).json({ error: String(err) });
   }
 });
+
+// NETWATCH & PING MONITORS
+apiRouter.get('/netwatch', requireAuth, async (req, res) => {
+  try {
+    const netwatch = await getAllNetwatchHosts();
+    res.json(netwatch);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+apiRouter.post('/netwatch', requireAuth, async (req: any, res) => {
+  if (req.user.role === 'readonly') return res.status(403).json({ error: 'Readonly users cannot modify Netwatch' });
+  const { routerId, host, comment, interval } = req.body;
+  if (!routerId || !host) return res.status(400).json({ error: 'routerId y host son requeridos' });
+
+  try {
+    await addNetwatchHostToRouter(routerId, host, comment, interval);
+    res.json({ success: true, message: 'Host/Antena agregada a Netwatch' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+apiRouter.delete('/netwatch/:routerId/:mikrotikId', requireAuth, async (req: any, res) => {
+  if (req.user.role === 'readonly') return res.status(403).json({ error: 'Readonly users cannot modify Netwatch' });
+  const { routerId, mikrotikId } = req.params;
+  try {
+    await deleteNetwatchHostFromRouter(routerId, mikrotikId);
+    res.json({ success: true, message: 'Host/Antena eliminada de Netwatch' });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+apiRouter.post('/routers/:id/ping', requireAuth, async (req, res) => {
+  const { host, count } = req.body;
+  if (!host) return res.status(400).json({ error: 'Host es requerido' });
+
+  try {
+    const result = await pingHostOnRouter(req.params.id, host, count || 3);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+apiRouter.post('/netwatch/ping-batch', requireAuth, async (req, res) => {
+  const { targets } = req.body; // Array of { routerId, host }
+  if (!Array.isArray(targets)) return res.status(400).json({ error: 'targets must be an array' });
+
+  try {
+    const results = await Promise.all(
+      targets.map(t => pingHostOnRouter(t.routerId, t.host, t.count || 2))
+    );
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useStore } from './lib/store';
-import { Activity, Users, Settings as SettingsIcon, Router, ChevronRight, Zap, ShieldAlert, Cpu, LogOut, Loader2 } from 'lucide-react';
+import { Activity, Users, Settings as SettingsIcon, Router, ChevronRight, Zap, ShieldAlert, Cpu, LogOut, Loader2, Radio } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Dashboard } from './components/Dashboard';
 import { Clients } from './components/Clients';
@@ -8,6 +8,7 @@ import { Login } from './components/Login';
 import { UsersAdmin } from './components/UsersAdmin';
 import { Routers } from './components/Routers';
 import { Settings } from './components/Settings';
+import { AntennasNetwatch } from './components/AntennasNetwatch';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 
@@ -91,6 +92,7 @@ export default function App() {
   const menu = [
     { id: 'dashboard', label: 'Panel de Control', icon: Activity },
     { id: 'clients', label: 'Clientes', icon: Users },
+    { id: 'antennas', label: 'Antenas & Netwatch', icon: Radio },
     { id: 'routers', label: 'Nodos MikroTik', icon: Router },
     ...(user?.role === 'admin' ? [{ id: 'users', label: 'Administrar Usuarios', icon: ShieldAlert }] : []),
     { id: 'settings', label: 'Configuración y Bot', icon: SettingsIcon },
@@ -176,6 +178,7 @@ export default function App() {
           >
             {activeTab === 'dashboard' && <Dashboard />}
             {activeTab === 'clients' && <Clients />}
+            {activeTab === 'antennas' && <AntennasNetwatch />}
             {activeTab === 'users' && user?.role === 'admin' && <UsersAdmin />}
             {activeTab === 'routers' && <Routers />}
             {activeTab === 'settings' && <Settings />}
