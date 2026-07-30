@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDb } from './db.js';
+import { getDb, backupDbToFile } from './db.js';
 import { 
     syncRouter, 
     provisionClientToRouter, 
@@ -221,8 +221,9 @@ apiRouter.post('/routers', requireAuth, requireAdmin, (req, res) => {
   const id = crypto.randomUUID();
   try {
     db.prepare('INSERT INTO routers (id, name, host, port, username, password, status) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(id, name, host, port || 8728, username, password, 'disconnected');
+      .run(id, name, host, port || 8728, username, password || '', 'disconnected');
     
+    backupDbToFile();
     // Trigger sync
     syncRouter(id).catch(console.error);
     
@@ -236,9 +237,15 @@ apiRouter.put('/routers/:id', requireAuth, requireAdmin, (req, res) => {
   const db = getDb();
   const { name, host, port, username, password } = req.body;
   try {
-    db.prepare('UPDATE routers SET name = ?, host = ?, port = ?, username = ?, password = ?, status = ? WHERE id = ?')
-      .run(name, host, port || 8728, username, password, 'disconnected', req.params.id);
+    if (password && password.trim() !== '') {
+      db.prepare('UPDATE routers SET name = ?, host = ?, port = ?, username = ?, password = ?, status = ? WHERE id = ?')
+        .run(name, host, port || 8728, username, password, 'disconnected', req.params.id);
+    } else {
+      db.prepare('UPDATE routers SET name = ?, host = ?, port = ?, username = ?, status = ? WHERE id = ?')
+        .run(name, host, port || 8728, username, 'disconnected', req.params.id);
+    }
     
+    backupDbToFile();
     // Trigger sync
     syncRouter(req.params.id).catch(console.error);
     
@@ -471,6 +478,7 @@ apiRouter.delete('/routers/:id', requireAuth, requireAdmin, (req, res) => {
   try {
     db.prepare('DELETE FROM clients WHERE routerId = ?').run(req.params.id);
     db.prepare('DELETE FROM routers WHERE id = ?').run(req.params.id);
+    backupDbToFile();
     res.json({ success: true });
   } catch(err) {
     res.status(500).json({ error: String(err) });
